@@ -22,7 +22,28 @@ class S(BaseHTTPRequestHandler):
 
         # the hardcoded value to send to Rest.bitcoin.com
         # String should use triple quotes to avoid Python escaping single quotes
-        hardcoded_response = """{"hash": "789c69d284f0fdd25c11a109ff623720b4dab65f5b8c7b81711790df769f37c3", "confirmations": 1, "size": 192, "height": 410, "version": 536870912, "versionHex": "20000000", "merkleroot": "59069725aa2dde43015270f19fed9442aad2f4ff674b65605122e6acd22d8ba1", "tx": ["59069725aa2dde43015270f19fed9442aad2f4ff674b65605122e6acd22d8ba1"], "time": 1600244712, "mediantime": 1600244711, "nonce": 1, "bits": "207fffff", "difficulty": 4.656542373906925e-10, "chainwork": "0000000000000000000000000000000000000000000000000000000000000336", "previousblockhash": "055f7518a6551207cb23e735c1c9594c33e0d98ae84f07bcf907711b5e0c44b9"}"""
+        hardcoded_response = """
+        {
+            "hash": "3c91710d77bcf716f3932576f7403e6274ac0510f0336cc779bb3d04d473a857",
+            "confirmations": 161,
+            "size": 192,
+            "height": 250,
+            "version": 536870912,
+            "versionHex": "20000000",
+            "merkleroot": "22751eb4381b31ef4c27f0bff8aa98bd1d87b4f6c6ee9cabcf12ee914d6bf124",
+            "tx": [
+                "22751eb4381b31ef4c27f0bff8aa98bd1d87b4f6c6ee9cabcf12ee914d6bf124"
+            ],
+            "time": 1600244549,
+            "mediantime": 1600244548,
+            "nonce": 0,
+            "bits": "207fffff",
+            "difficulty": 4.656542373906925e-10,
+            "chainwork": "00000000000000000000000000000000000000000000000000000000000001f6",
+            "previousblockhash": "2b7fdfe28d9b28d094c8866d3e781022969e8bee93d0f364a7af01fed77b3c71",
+            "nextblockhash": "1e7a7e60154bc72d291247958c0fcd3b786516abd4c4463c1ddc1cf23db35d1d"
+        }
+        """
 
         # Send hardcoded response back to rest.bitcoin.com, must be encoded byte array
         self.wfile.write(bytes(hardcoded_response.encode("utf-8")))
