@@ -220,10 +220,75 @@ class Transactions(Resource):
         }
 
 
+class AddressUtxos(Resource):
+    def get(self, address):
+
+        return [
+            {
+                "txid": "cb59443f4ca390df41e66db619cd385bac03a8271ec820bb7e8bab41a6cbcfea",
+                "vout": 0,
+                "amount": 1.56261,
+                "satoshis": 156261000,
+                "height": 1255647,
+                "confirmations": 122814,
+                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
+                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
+            },
+            {
+                "txid": "5bbea2c8507b2a2e3482c3a76536f12112577e47a6b386678458a0949639d03b",
+                "vout": 0,
+                "amount": 1.563855,
+                "satoshis": 156385500,
+                "height": 1255646,
+                "confirmations": 122815,
+                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
+                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
+            },
+            {
+                "txid": "ef78817602661ff4f52d6ab959aa557b4b2d67fd12c4db879fe62175aa18b327",
+                "vout": 0,
+                "amount": 1.5645668,
+                "satoshis": 156456680,
+                "height": 1255644,
+                "confirmations": 122817,
+                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
+                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
+            }
+        ]
+
+
+class BlockDetails(Resource):
+    def get(self, blockhash):
+
+        return {
+            "hash": "3c91710d77bcf716f3932576f7403e6274ac0510f0336cc779bb3d04d473a857",
+            "confirmations": 161,
+            "size": 192,
+            "height": 250,
+            "version": 536870912,
+            "versionHex": "20000000",
+            "merkleroot": "22751eb4381b31ef4c27f0bff8aa98bd1d87b4f6c6ee9cabcf12ee914d6bf124",
+            "tx": [
+                "22751eb4381b31ef4c27f0bff8aa98bd1d87b4f6c6ee9cabcf12ee914d6bf124"
+            ],
+            "time": 1600244549,
+            "mediantime": 1600244548,
+            "nonce": 0,
+            "bits": "207fffff",
+            "difficulty": 4.656542373906925e-10,
+            "chainwork": "00000000000000000000000000000000000000000000000000000000000001f6",
+            "previousblockhash": "2b7fdfe28d9b28d094c8866d3e781022969e8bee93d0f364a7af01fed77b3c71",
+            "nextblockhash": "1e7a7e60154bc72d291247958c0fcd3b786516abd4c4463c1ddc1cf23db35d1d"
+        }
+
+
+
 api.add_resource(EntryPoint, '/')
 api.add_resource(AddressDetail, '/api/addr/<address>')
 api.add_resource(TransactionDetail, '/api/tx/<transaction>')
 api.add_resource(Transactions, '/api/txs/')
+api.add_resource(AddressUtxos, '/api/addr/<address>/utxo')
+api.add_resource(BlockDetails, '/api/block/<blockhash>')
 
 
 if __name__ == '__main__':
