@@ -1,14 +1,16 @@
 # app.py - a minimal flask api using flask_restful
+import hashlib
 import json
 import socket
 
+from cashaddress import convert
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
 
 app = Flask(__name__)
 api = Api(app)
 
-HOST = "127.0.0.1"
+HOST = "bitcoind-regtest"
 PORT = 50001
 
 
@@ -42,12 +44,32 @@ def call_method_electrum(method, params):
     client = connect_to_tcp(HOST, PORT)
 
     client.sendall(bytes(json.dumps(payload) + "\n", "ascii"))
-    response = client.recv(4096)
 
+    response = client.recv(999999999)
     client.close()
 
     return dict(json.loads(response.decode()))
 
+
+def format_utxo_from_electrum(utxo, address, p2pkh_script):
+    res_utxo = {}
+    res_utxo['height'] = utxo['height']
+    res_utxo['txid'] = utxo['tx_hash']
+    res_utxo['height'] = utxo['tx_hash']
+    res_utxo['vout'] = utxo['tx_pos']
+    res_utxo['satoshis'] = utxo['value']
+    res_utxo['amount'] = utxo['value'] // 100000000
+    res_utxo['address'] = address
+    res_utxo['scriptPubKey'] = p2pkh_script
+
+    tx = call_method_electrum(
+        "blockchain.transaction.get",
+        [utxo['tx_hash'], True]
+    )
+
+    res_utxo['confirmations'] = tx['result']['confirmations']
+
+    return res_utxo
 
 
 class EntryPoint(Resource):
@@ -121,7 +143,6 @@ class AddressDetail(Resource):
 
 class TransactionDetail(Resource):
     def get(self, transaction):
-        args = parser.parse_args()
 
         return {
             "txid": "40112ab9d2b5f98427839272d7a1e23dd2afc6c8355626f373e076c2ab5c2f72",
@@ -279,23 +300,14 @@ class AddressUtxos(Resource):
             p2pkh_script
         ).digest()[::-1].hex()
 
-        response = call_method_electrum("blockchain.scripthash.listunspent", [script_sha256_reversed])
+        utxos = call_method_electrum(
+            "blockchain.scripthash.listunspent",
+            [script_sha256_reversed]
+        )
 
-        return [
-            {
-                "txid": "cb59443f4ca390df41e66db619cd385bac03a8271ec820bb7e8bab41a6cbcfea",
-                "height": 1255647,
-                "vout": 0,
-                "satoshis": 156261000,
+        utxos_formatted = [format_utxo_from_electrum(x, address, p2pkh_script.hex()) for x in utxos['result']]
 
-                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
-                "amount": 1.56261,
-                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
-
-
-                "confirmations": 122814,
-            },
-        ]
+        return utxos_formatted
 
 
 class BlockDetails(Resource):
