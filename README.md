@@ -12,7 +12,6 @@ Build the docker image
 
 # Run
 
-
 ```bash
 ./run
 ```
