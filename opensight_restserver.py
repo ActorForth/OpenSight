@@ -3,6 +3,7 @@ import hashlib
 import json
 import socket
 
+import requests
 from cashaddress import convert
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
@@ -10,8 +11,13 @@ from flask_restful import Api, Resource, reqparse
 app = Flask(__name__)
 api = Api(app)
 
-HOST = "bitcoind-regtest"
-PORT = 50001
+ELECTRUM_HOST = "bitcoind-regtest"
+ELECTRUM_PORT = 50001
+
+NODE_RPC_HOST = "bitcoind-regtest"
+NODE_RPC_PORT = 18332
+NODE_RPC_USER = "regtest"
+NODE_RPC_PASS = "regtest"
 
 
 OP_CHECKSIG = b'\xac'
@@ -33,6 +39,24 @@ def connect_to_tcp(host, port):
     return client
 
 
+def call_method_node(method, params):
+    payload = {
+        "jsonrpc": "1.0",
+        "id": 0,
+        "method": method,
+        "params": params
+    }
+    request_headers = {'content-type': 'text/plain; '}
+
+    response = requests.post(
+        "http://{}:{}@{}:{}".format(NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT),
+        headers=request_headers,
+        data=json.dumps(payload)
+    ).json()
+
+    return dict(response)["result"]
+
+
 def call_method_electrum(method, params):
     payload = {
         "method": method,
@@ -41,14 +65,14 @@ def call_method_electrum(method, params):
         "id": 0,
     }
 
-    client = connect_to_tcp(HOST, PORT)
+    client = connect_to_tcp(ELECTRUM_HOST, ELECTRUM_PORT)
 
     client.sendall(bytes(json.dumps(payload) + "\n", "ascii"))
 
     response = client.recv(999999999)
     client.close()
 
-    return dict(json.loads(response.decode()))
+    return dict(json.loads(response.decode()))['result']
 
 
 def format_utxo_from_electrum(utxo, address, p2pkh_script):
@@ -58,7 +82,7 @@ def format_utxo_from_electrum(utxo, address, p2pkh_script):
     res_utxo['height'] = utxo['tx_hash']
     res_utxo['vout'] = utxo['tx_pos']
     res_utxo['satoshis'] = utxo['value']
-    res_utxo['amount'] = utxo['value'] // 100000000
+    res_utxo['amount'] = utxo['value'] / 100000000.0
     res_utxo['address'] = address
     res_utxo['scriptPubKey'] = p2pkh_script
 
@@ -70,6 +94,17 @@ def format_utxo_from_electrum(utxo, address, p2pkh_script):
     res_utxo['confirmations'] = tx['result']['confirmations']
 
     return res_utxo
+
+
+def get_block_reward(block):
+    amount = 0
+    coinbase_tx = block['tx'][0]
+    tx = call_method_electrum('blockchain.transaction.get', [coinbase_tx, True])
+
+    for vout in tx['vout']:
+        amount += vout['value']
+
+    return (amount / 100000000.0)
 
 
 class EntryPoint(Resource):
@@ -305,7 +340,7 @@ class AddressUtxos(Resource):
             [script_sha256_reversed]
         )
 
-        utxos_formatted = [format_utxo_from_electrum(x, address, p2pkh_script.hex()) for x in utxos['result']]
+        utxos_formatted = [format_utxo_from_electrum(x, address, p2pkh_script.hex()) for x in utxos]
 
         return utxos_formatted
 
@@ -313,26 +348,14 @@ class AddressUtxos(Resource):
 class BlockDetails(Resource):
     def get(self, blockhash):
 
-        return {
-            "hash": "3c91710d77bcf716f3932576f7403e6274ac0510f0336cc779bb3d04d473a857",
-            "confirmations": 161,
-            "size": 192,
-            "height": 250,
-            "version": 536870912,
-            "versionHex": "20000000",
-            "merkleroot": "22751eb4381b31ef4c27f0bff8aa98bd1d87b4f6c6ee9cabcf12ee914d6bf124",
-            "tx": [
-                "22751eb4381b31ef4c27f0bff8aa98bd1d87b4f6c6ee9cabcf12ee914d6bf124"
-            ],
-            "time": 1600244549,
-            "mediantime": 1600244548,
-            "nonce": 0,
-            "bits": "207fffff",
-            "difficulty": 4.656542373906925e-10,
-            "chainwork": "00000000000000000000000000000000000000000000000000000000000001f6",
-            "previousblockhash": "2b7fdfe28d9b28d094c8866d3e781022969e8bee93d0f364a7af01fed77b3c71",
-            "nextblockhash": "1e7a7e60154bc72d291247958c0fcd3b786516abd4c4463c1ddc1cf23db35d1d"
-        }
+        block = call_method_node("getblock", [blockhash, True])
+        # To investigate
+        block["isMainChain"] = True
+        block["poolInfo"] = {}
+
+        block["reward"] = get_block_reward(block)
+
+        return block
 
 
 api.add_resource(EntryPoint, '/')

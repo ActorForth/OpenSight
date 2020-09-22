@@ -1,3 +1,4 @@
 cashaddress
 flask
 flask_restful
+requests
