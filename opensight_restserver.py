@@ -1,11 +1,9 @@
 # app.py - a minimal flask api using flask_restful
 from flask import Flask
-from flask_restful import Resource, Api, reqparse
-
+from flask_restful import Api, Resource, reqparse
 
 app = Flask(__name__)
 api = Api(app)
-parser = reqparse.RequestParser()
 
 class EntryPoint(Resource):
     def get(self):
@@ -76,8 +74,157 @@ class AddressDetail(Resource):
             "addrStr": "bchreg:qp7j7jy8c0q0n70cs4mpks3mcqu5perw6gmz4zu4xc"
         }
 
+
+class TransactionDetail(Resource):
+    def get(self, transaction):
+        args = parser.parse_args()
+
+        return {
+            "txid": "40112ab9d2b5f98427839272d7a1e23dd2afc6c8355626f373e076c2ab5c2f72",
+            "version": 1,
+            "locktime": 0,
+            "vin": [
+                {
+                    "txid": "56a081af7f5162b0ddcf5f629c7867a072b785df9146576b1d39f30f3f8d4af9",
+                    "vout": 1,
+                    "sequence": 4294967295,
+                    "n": 0,
+                    "scriptSig": {
+                        "hex": "473044022065d3d111db75d01d001bbd411961759f7b2eacab379912c159208f8147e322ea02201fe597474710966b16ae97b0e0673d5ca66bfe8618f89addea833f6e87cf4e3641210289d92b4239c112e97db3aac9590681968bd00415e974dba04bc81cca96b8c7ec",
+                        "asm": "3044022065d3d111db75d01d001bbd411961759f7b2eacab379912c159208f8147e322ea02201fe597474710966b16ae97b0e0673d5ca66bfe8618f89addea833f6e87cf4e36[ALL|FORKID] 0289d92b4239c112e97db3aac9590681968bd00415e974dba04bc81cca96b8c7ec"
+                    },
+                    "valueSat": 528122066,
+                }
+            ],
+            "vout": [
+                {
+                    "value": "0.00002000",
+                    "n": 0,
+                    "scriptPubKey": {
+                        "hex": "76a91432b57f34861bcbe33a701be9ac3a50288fbc0a3d88ac",
+                        "asm": "OP_DUP OP_HASH160 32b57f34861bcbe33a701be9ac3a50288fbc0a3d OP_EQUALVERIFY OP_CHECKSIG",
+                        "addresses": [
+                            "mk95WGfZS9Tuk7o8acBwiuDyhtVhUACMaZ"
+                        ],
+                        "type": "pubkeyhash",
+                    },
+                    "spentTxId": None,
+                    "spentIndex": None,
+                    "spentHeight": None
+                },
+                {
+                    "value": "5.28119752",
+                    "n": 1,
+                    "scriptPubKey": {
+                        "hex": "76a914b8e0a1c9040f8636a453ba077d7fa5f2318c7d0c88ac",
+                        "asm": "OP_DUP OP_HASH160 b8e0a1c9040f8636a453ba077d7fa5f2318c7d0c OP_EQUALVERIFY OP_CHECKSIG",
+                        "addresses": [
+                            "mxNVj45miWLQyG8DwjX2YsPLoTUK7raHuy"
+                        ],
+                        "type": "pubkeyhash",
+                    },
+                    "spentTxId": "fd6bd179c769a044d93710996dbf4dc33fa4cf9eb3e408d73880b74254d184c6",
+                    "spentIndex": 0,
+                    "spentHeight": 1274549
+                }
+            ],
+            "blockhash": "00000000002a7077295ec8d4f7afdace8d37d694384cc821e406834fe57aeaae",
+            "blockheight": 1274549,
+            "confirmations": 103912,
+            "time": 1545086356,
+            "blocktime": 1545086356,
+            "valueOut": 5.28121752,
+            "size": 225,
+            "valueIn": 5.28122066,
+            "fees": 0.00000314
+        }
+
+
+class Transactions(Resource):
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('address', type=str)
+        parser.add_argument('pageNum', type=str)
+
+        args = parser.parse_args()
+
+        return {
+            "pagesTotal": 11844,
+            "txs": [
+                {
+                    "txid": "f0a4bea799ae42ab5ea597ca5a768c44efbee70e71d51bca304f54a30161f747",
+                    "version": 1,
+                    "locktime": 0,
+                    "vin": [
+                        {
+                            "txid": "c788ace35c42b70cf5abe5d085cf1f4cc621642e0a0a5f8474935573ef725ac3",
+                            "vout": 1,
+                            "sequence": 4294967295,
+                            "n": 0,
+                            "scriptSig": {
+                                "hex": "473044022045fd1fdbfb516d67ca68ef4b33260b7cd90ae04c81adaab638ce065c81d21c2d022064af3f1847e512c5e62b138bf8f9fdbe98738744ec51bf1946c5d3bcf479c50a41210289d92b4239c112e97db3aac9590681968bd00415e974dba04bc81cca96b8c7ec",
+                                "asm": "3044022045fd1fdbfb516d67ca68ef4b33260b7cd90ae04c81adaab638ce065c81d21c2d022064af3f1847e512c5e62b138bf8f9fdbe98738744ec51bf1946c5d3bcf479c50a[ALL|FORKID] 0289d92b4239c112e97db3aac9590681968bd00415e974dba04bc81cca96b8c7ec"
+                            },
+                            "addr": "mxNVj45miWLQyG8DwjX2YsPLoTUK7raHuy",
+                            "valueSat": 261777652,
+                            "value": 2.61777652,
+                            "doubleSpentTxID": None
+                        }
+                    ],
+                    "vout": [
+                        {
+                            "value": "0.00002000",
+                            "n": 0,
+                            "scriptPubKey": {
+                                "hex": "76a91432b57f34861bcbe33a701be9ac3a50288fbc0a3d88ac",
+                                "asm": "OP_DUP OP_HASH160 32b57f34861bcbe33a701be9ac3a50288fbc0a3d OP_EQUALVERIFY OP_CHECKSIG",
+                                "addresses": [
+                                    "mk95WGfZS9Tuk7o8acBwiuDyhtVhUACMaZ"
+                                ],
+                                "type": "pubkeyhash"
+                            },
+                            "spentTxId": None,
+                            "spentIndex": None,
+                            "spentHeight": None
+                        },
+                        {
+                            "value": "2.61775317",
+                            "n": 1,
+                            "scriptPubKey": {
+                                "hex": "76a914b8e0a1c9040f8636a453ba077d7fa5f2318c7d0c88ac",
+                                "asm": "OP_DUP OP_HASH160 b8e0a1c9040f8636a453ba077d7fa5f2318c7d0c OP_EQUALVERIFY OP_CHECKSIG",
+                                "addresses": [
+                                    "mxNVj45miWLQyG8DwjX2YsPLoTUK7raHuy"
+                                ],
+                                "type": "pubkeyhash"
+                            },
+                            "spentTxId": "d14aaf9aa0c8bf8f987f91e1565626529416866b25fbe3eb0b0540c4700df185",
+                            "spentIndex": 0,
+                            "spentHeight": 1292555
+                        }
+                    ],
+                    "blockhash": "000000004c4b9e84d45d986aec26783a270a992bfcc226143d3f2646ecdab374",
+                    "blockheight": 1292555,
+                    "confirmations": 85906,
+                    "time": 1552511340,
+                    "blocktime": 1552511340,
+                    "valueOut": 2.61777317,
+                    "size": 225,
+                    "valueIn": 2.61777652,
+                    "fees": 0.00000335
+                },
+            ],
+            "legacyAddress": "mxNVj45miWLQyG8DwjX2YsPLoTUK7raHuy",
+            "cashAddress": "bchtest:qzuwpgwfqs8cvd4y2waqwltl5herrrrapsujlsdcwf",
+            "currentPage": 0
+        }
+
+
 api.add_resource(EntryPoint, '/')
 api.add_resource(AddressDetail, '/api/addr/<address>')
+api.add_resource(TransactionDetail, '/api/tx/<transaction>')
+api.add_resource(Transactions, '/api/txs/')
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port='3001')
