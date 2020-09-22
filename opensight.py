@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # This is an open source implementation of the Insight service to use with the 
 # rest.bitcoin.com API
 
