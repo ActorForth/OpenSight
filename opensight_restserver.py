@@ -1,9 +1,54 @@
 # app.py - a minimal flask api using flask_restful
+import json
+import socket
+
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
 
 app = Flask(__name__)
 api = Api(app)
+
+HOST = "127.0.0.1"
+PORT = 50001
+
+
+OP_CHECKSIG = b'\xac'
+OP_DUP = b'v'
+OP_EQUALVERIFY = b'\x88'
+OP_HASH160 = b'\xa9'
+OP_PUSH_20 = b'\x14'
+
+
+def address_to_public_key_hash(address):
+    address = convert.to_cash_address(address)
+    Address = convert.Address._cash_string(address)
+    return bytes(Address.payload)
+
+
+def connect_to_tcp(host, port):
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((host, port))
+    return client
+
+
+def call_method_electrum(method, params):
+    payload = {
+        "method": method,
+        "params": params,
+        "jsonrpc": "2.0",
+        "id": 0,
+    }
+
+    client = connect_to_tcp(HOST, PORT)
+
+    client.sendall(bytes(json.dumps(payload) + "\n", "ascii"))
+    response = client.recv(4096)
+
+    client.close()
+
+    return dict(json.loads(response.decode()))
+
+
 
 class EntryPoint(Resource):
     def get(self):
@@ -12,7 +57,6 @@ class EntryPoint(Resource):
 
 class AddressDetail(Resource):
     def get(self, address):
-        args = parser.parse_args()
 
         return {
             "balance": 0.00014673,
@@ -222,38 +266,35 @@ class Transactions(Resource):
 
 class AddressUtxos(Resource):
     def get(self, address):
+        p2pkh_script: bytes = (
+            OP_DUP +
+            OP_HASH160 +
+            OP_PUSH_20 +
+            address_to_public_key_hash(address) +
+            OP_EQUALVERIFY +
+            OP_CHECKSIG
+        )
+        script_sha256_reversed: str = hashlib.new(
+            'sha256',
+            p2pkh_script
+        ).digest()[::-1].hex()
+
+        response = call_method_electrum("blockchain.scripthash.listunspent", [script_sha256_reversed])
 
         return [
             {
                 "txid": "cb59443f4ca390df41e66db619cd385bac03a8271ec820bb7e8bab41a6cbcfea",
-                "vout": 0,
-                "amount": 1.56261,
-                "satoshis": 156261000,
                 "height": 1255647,
+                "vout": 0,
+                "satoshis": 156261000,
+
+                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
+                "amount": 1.56261,
+                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
+
+
                 "confirmations": 122814,
-                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
-                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
             },
-            {
-                "txid": "5bbea2c8507b2a2e3482c3a76536f12112577e47a6b386678458a0949639d03b",
-                "vout": 0,
-                "amount": 1.563855,
-                "satoshis": 156385500,
-                "height": 1255646,
-                "confirmations": 122815,
-                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
-                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
-            },
-            {
-                "txid": "ef78817602661ff4f52d6ab959aa557b4b2d67fd12c4db879fe62175aa18b327",
-                "vout": 0,
-                "amount": 1.5645668,
-                "satoshis": 156456680,
-                "height": 1255644,
-                "confirmations": 122817,
-                "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
-                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
-            }
         ]
 
 
@@ -280,7 +321,6 @@ class BlockDetails(Resource):
             "previousblockhash": "2b7fdfe28d9b28d094c8866d3e781022969e8bee93d0f364a7af01fed77b3c71",
             "nextblockhash": "1e7a7e60154bc72d291247958c0fcd3b786516abd4c4463c1ddc1cf23db35d1d"
         }
-
 
 
 api.add_resource(EntryPoint, '/')
