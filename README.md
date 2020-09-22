@@ -1,5 +1,5 @@
 # About 
-An alternate to a deprecate Insight API and the closed-source Ninsight one. 
+An alternate to the deprecated Insight API and the closed-source Ninsight one. 
 
 # Installation
 
