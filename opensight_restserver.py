@@ -290,9 +290,7 @@ class AddressUtxos(Resource):
 
                 "address": "a34bd369e9dca0837d5480fd7c3e6cd9449ac154",
                 "amount": 1.56261,
-                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac"
-
-
+                "scriptPubKey": "76a914a34bd369e9dca0837d5480fd7c3e6cd9449ac15488ac",
                 "confirmations": 122814,
             },
         ]
