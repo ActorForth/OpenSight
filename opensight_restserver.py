@@ -108,7 +108,7 @@ def format_utxo_from_electrum(utxo, address, p2pkh_script):
         [utxo['tx_hash'], True]
     )
 
-    res_utxo['confirmations'] = tx['result']['confirmations']
+    res_utxo['confirmations'] = tx['confirmations']
 
     return res_utxo
 
@@ -158,11 +158,28 @@ def get_tx_details(tx_hash):
 
     tx["fees"] = tx["valueIn"] - tx["valueOut"]
 
-    tx["blockheight"] = call_method_node(
-        "getblock",
-        [tx["blockhash"]]
-    )["height"]
+    if "blockhash" in tx:
+        tx["blockheight"] = call_method_node(
+            "getblock",
+            [tx["blockhash"]]
+        )["height"]
     return tx
+
+
+def get_txs_for_address(address):
+    p2pkh_script, script_hash = script_hash_from_address(address)
+
+    tx_history = call_method_electrum(
+        "blockchain.scripthash.get_history",
+        [script_hash]
+    )
+
+    txs = {}
+    txs["txs"] = [get_tx_details(tx["tx_hash"]) for tx in tx_history]
+    txs["pagesTotal"] = 0
+    txs["currentPage"] = 0
+
+    return txs
 
 
 class EntryPoint(Resource):
@@ -172,23 +189,46 @@ class EntryPoint(Resource):
 
 class AddressDetail(Resource):
     def get(self, address):
+        p2pkh_script, script_hash = script_hash_from_address(address)
 
-        return {
-            "balance": 0.00014673,
-            "balanceSat": 14673,
-            "totalReceived": 0.10200541,
-            "totalReceivedSat": 10200541,
-            "totalSent": 0.10185868,
-            "totalSentSat": 10185868,
-            "unconfirmedBalance": 0,
-            "unconfirmedBalanceSat": 0,
-            "unconfirmedTxApperances": 0,
-            "txApperances": 44,
-            "transactions": [
-                "81039b1d7b855b133f359f9dc65f776bd105650153a941675fedc504228ddbd3"
-            ],
-            "addrStr": "bchreg:qp7j7jy8c0q0n70cs4mpks3mcqu5perw6gmz4zu4xc"
-        }
+        txs = get_txs_for_address(address)
+
+        balance = call_method_electrum(
+            "blockchain.scripthash.get_balance",
+            [script_hash]
+        )
+
+        address_details = {}
+        total_balance = balance["confirmed"] + balance["unconfirmed"]
+
+        address_details["addrStr"] = address
+        address_details["balanceSat"] = total_balance
+        address_details["unconfirmedBalanceSat"] = balance["unconfirmed"]
+
+        address_details["balance"] = total_balance / 100000000.0
+        address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
+
+        address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
+        address_details["txApperances"] = len(address_details["transactions"])
+
+        total_received = 0
+        txs_unconfirmed_qty = 0
+        for tx in txs["txs"]:
+            if tx["confirmations"] <= 0:
+                txs_unconfirmed_qty += 1
+            for vout in tx["vout"]:
+                if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
+                    total_received += vout["value"]
+
+        total_sent = total_received - address_details["balance"]
+
+        address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
+        address_details["totalReceived"] = total_received
+        address_details["totalReceivedSat"] = int(total_received * 100000000)
+        address_details["totalSent"] = total_sent
+        address_details["totalSentSat"] = int(total_sent * 100000000)
+
+        return address_details
 
 
 class TransactionDetail(Resource):
@@ -204,19 +244,7 @@ class Transactions(Resource):
 
         args = parser.parse_args()
 
-        p2pkh_script, script_hash = script_hash_from_address(args["address"])
-
-        tx_history = call_method_electrum(
-            "blockchain.scripthash.get_history",
-            [script_hash]
-        )
-
-        txs = {}
-        txs["txs"] = [get_tx_details(tx["tx_hash"]) for tx in tx_history]
-        txs["pagesTotal"] = 0
-        txs["currentPage"] = 0
-
-        return txs
+        return get_txs_for_address(args["address"])
 
 
 class AddressUtxos(Resource):
