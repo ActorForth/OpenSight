@@ -120,6 +120,7 @@ def format_tx_vin(vin, n):
     )
     vin["value"] = tx_vout["vout"][vin["vout"]]["value"]
     vin["n"] = n
+    vin["doubleSpentTxID"] = None
     return vin
 
 
