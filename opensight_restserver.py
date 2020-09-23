@@ -33,6 +33,23 @@ def address_to_public_key_hash(address):
     return bytes(Address.payload)
 
 
+def script_hash_from_address(address):
+    p2pkh_script: bytes = (
+        OP_DUP +
+        OP_HASH160 +
+        OP_PUSH_20 +
+        address_to_public_key_hash(address) +
+        OP_EQUALVERIFY +
+        OP_CHECKSIG
+    )
+    script_sha256_reversed: str = hashlib.new(
+        'sha256',
+        p2pkh_script
+    ).digest()[::-1].hex()
+
+    return (p2pkh_script, script_sha256_reversed)
+
+
 def connect_to_tcp(host, port):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((host, port))
@@ -114,9 +131,6 @@ def format_tx_vout(vout):
     return vout
 
 
-
-
-
 def get_block_reward(block):
     amount = 0
     coinbase_tx = block['tx'][0]
@@ -126,6 +140,28 @@ def get_block_reward(block):
         amount += vout['value']
 
     return (amount / 100000000.0)
+
+
+def get_tx_details(tx_hash):
+    tx = call_method_node(
+        "getrawtransaction",
+        [tx_hash, True]
+    )
+    tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
+    tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
+
+    tx.pop('hex', None)
+
+    tx["valueIn"] = sum([vin["value"] for vin in tx["vin"]])
+    tx["valueOut"] = sum([vout["value"] for vout in tx["vout"]])
+
+    tx["fees"] = tx["valueIn"] - tx["valueOut"]
+
+    tx["blockheight"] = call_method_node(
+        "getblock",
+        [tx["blockhash"]]
+    )["height"]
+    return tx
 
 
 class EntryPoint(Resource):
@@ -156,28 +192,7 @@ class AddressDetail(Resource):
 
 class TransactionDetail(Resource):
     def get(self, transaction):
-
-        tx = call_method_node(
-            "getrawtransaction",
-            [transaction, True]
-        )
-        tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
-        tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
-
-        tx.pop('hex', None)
-
-        tx["valueIn"] = sum([vin["value"] for vin in tx["vin"]])
-        tx["valueOut"] = sum([vout["value"] for vout in tx["vout"]])
-
-        tx["fees"] = tx["valueIn"] - tx["valueOut"]
-
-        tx["blockheight"] = call_method_node(
-            "getblock",
-            [tx["blockhash"]]
-        )["height"]
-
-        return tx
-
+        return get_tx_details(transaction)
 
 
 class Transactions(Resource):
@@ -188,96 +203,28 @@ class Transactions(Resource):
 
         args = parser.parse_args()
 
-        return {
-            "pagesTotal": 11844,
-            "txs": [
-                {
-                    "txid": "f0a4bea799ae42ab5ea597ca5a768c44efbee70e71d51bca304f54a30161f747",
-                    "version": 1,
-                    "locktime": 0,
-                    "vin": [
-                        {
-                            "txid": "c788ace35c42b70cf5abe5d085cf1f4cc621642e0a0a5f8474935573ef725ac3",
-                            "vout": 1,
-                            "sequence": 4294967295,
-                            "n": 0,
-                            "scriptSig": {
-                                "hex": "473044022045fd1fdbfb516d67ca68ef4b33260b7cd90ae04c81adaab638ce065c81d21c2d022064af3f1847e512c5e62b138bf8f9fdbe98738744ec51bf1946c5d3bcf479c50a41210289d92b4239c112e97db3aac9590681968bd00415e974dba04bc81cca96b8c7ec",
-                                "asm": "3044022045fd1fdbfb516d67ca68ef4b33260b7cd90ae04c81adaab638ce065c81d21c2d022064af3f1847e512c5e62b138bf8f9fdbe98738744ec51bf1946c5d3bcf479c50a[ALL|FORKID] 0289d92b4239c112e97db3aac9590681968bd00415e974dba04bc81cca96b8c7ec"
-                            },
-                            "addr": "mxNVj45miWLQyG8DwjX2YsPLoTUK7raHuy",
-                            "valueSat": 261777652,
-                            "value": 2.61777652,
-                            "doubleSpentTxID": None
-                        }
-                    ],
-                    "vout": [
-                        {
-                            "value": "0.00002000",
-                            "n": 0,
-                            "scriptPubKey": {
-                                "hex": "76a91432b57f34861bcbe33a701be9ac3a50288fbc0a3d88ac",
-                                "asm": "OP_DUP OP_HASH160 32b57f34861bcbe33a701be9ac3a50288fbc0a3d OP_EQUALVERIFY OP_CHECKSIG",
-                                "addresses": [
-                                    "mk95WGfZS9Tuk7o8acBwiuDyhtVhUACMaZ"
-                                ],
-                                "type": "pubkeyhash"
-                            },
-                            "spentTxId": None,
-                            "spentIndex": None,
-                            "spentHeight": None
-                        },
-                        {
-                            "value": "2.61775317",
-                            "n": 1,
-                            "scriptPubKey": {
-                                "hex": "76a914b8e0a1c9040f8636a453ba077d7fa5f2318c7d0c88ac",
-                                "asm": "OP_DUP OP_HASH160 b8e0a1c9040f8636a453ba077d7fa5f2318c7d0c OP_EQUALVERIFY OP_CHECKSIG",
-                                "addresses": [
-                                    "mxNVj45miWLQyG8DwjX2YsPLoTUK7raHuy"
-                                ],
-                                "type": "pubkeyhash"
-                            },
-                            "spentTxId": "d14aaf9aa0c8bf8f987f91e1565626529416866b25fbe3eb0b0540c4700df185",
-                            "spentIndex": 0,
-                            "spentHeight": 1292555
-                        }
-                    ],
-                    "blockhash": "000000004c4b9e84d45d986aec26783a270a992bfcc226143d3f2646ecdab374",
-                    "blockheight": 1292555,
-                    "confirmations": 85906,
-                    "time": 1552511340,
-                    "blocktime": 1552511340,
-                    "valueOut": 2.61777317,
-                    "size": 225,
-                    "valueIn": 2.61777652,
-                    "fees": 0.00000335
-                },
-            ],
-            "legacyAddress": "mxNVj45miWLQyG8DwjX2YsPLoTUK7raHuy",
-            "cashAddress": "bchtest:qzuwpgwfqs8cvd4y2waqwltl5herrrrapsujlsdcwf",
-            "currentPage": 0
-        }
+        p2pkh_script, script_hash = script_hash_from_address(args["address"])
+
+        tx_history = call_method_electrum(
+            "blockchain.scripthash.get_history",
+            [script_hash]
+        )
+
+        txs = {}
+        txs["txs"] = [get_tx_details(tx["tx_hash"]) for tx in tx_history]
+        txs["pagesTotal"] = 0
+        txs["currentPage"] = 0
+
+        return txs
 
 
 class AddressUtxos(Resource):
     def get(self, address):
-        p2pkh_script: bytes = (
-            OP_DUP +
-            OP_HASH160 +
-            OP_PUSH_20 +
-            address_to_public_key_hash(address) +
-            OP_EQUALVERIFY +
-            OP_CHECKSIG
-        )
-        script_sha256_reversed: str = hashlib.new(
-            'sha256',
-            p2pkh_script
-        ).digest()[::-1].hex()
+        p2pkh_script, script_hash = script_hash_from_address(address)
 
         utxos = call_method_electrum(
             "blockchain.scripthash.listunspent",
-            [script_sha256_reversed]
+            [script_hash]
         )
 
         utxos_formatted = [
@@ -292,6 +239,7 @@ class BlockDetails(Resource):
     def get(self, blockhash):
 
         block = call_method_node("getblock", [blockhash, True])
+
         # To investigate
         block["isMainChain"] = True
         block["poolInfo"] = {}
