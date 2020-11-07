@@ -2,6 +2,7 @@
 import hashlib
 import json
 import socket
+import os
 
 import requests
 from cashaddress import convert
@@ -11,14 +12,15 @@ from flask_restful import Api, Resource, reqparse
 app = Flask(__name__)
 api = Api(app)
 
-ELECTRUM_HOST = "bitcoind-regtest"
-ELECTRUM_PORT = 50001
+ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST") or "bitcoind-regtest"
+ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT")) or 50001
 
-NODE_RPC_HOST = "bitcoind-regtest"
-NODE_RPC_PORT = 18332
-NODE_RPC_USER = "regtest"
-NODE_RPC_PASS = "regtest"
+NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST") or "bitcoind-regtest"
+NODE_RPC_PORT = int(os.environ.get("NODE_RPC_POST")) or 18332
+NODE_RPC_USER = os.environ.get("NODE_RPC_USER") or "regtest"
+NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS") or "regtest"
 
+OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT") or '3001'
 
 OP_CHECKSIG = b'\xac'
 OP_DUP = b'v'
@@ -287,4 +289,4 @@ api.add_resource(BlockDetails, '/api/block/<blockhash>')
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port='3001')
+    app.run(debug=True, host='0.0.0.0', port=OPENSIGHT_PORT)
