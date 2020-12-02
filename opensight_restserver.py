@@ -12,15 +12,15 @@ from flask_restful import Api, Resource, reqparse
 app = Flask(__name__)
 api = Api(app)
 
-ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST") or "bitcoind-regtest"
-ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT")) or 50001
+ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
+ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT", 50001))
 
-NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST") or "bitcoind-regtest"
-NODE_RPC_PORT = int(os.environ.get("NODE_RPC_POST")) or 18332
-NODE_RPC_USER = os.environ.get("NODE_RPC_USER") or "regtest"
-NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS") or "regtest"
+NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST", "bitcoind-regtest")
+NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18332)) 
+NODE_RPC_USER = os.environ.get("NODE_RPC_USER", "regtest")
+NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 
-OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT") or '3001'
+OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", '3001')
 
 OP_CHECKSIG = b'\xac'
 OP_DUP = b'v'
