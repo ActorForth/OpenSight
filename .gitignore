@@ -1,3 +1,7 @@
 rpc-websocket.py
 serv.py
 test.py
+/venv
+.coverage
+__pycache__/
+settings.json
