@@ -23,6 +23,8 @@ NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 
 OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", '3001')
 
+TIMEOUT_DELAY = 0.05
+
 OP_CHECKSIG = b'\xac'
 OP_DUP = b'v'
 OP_EQUALVERIFY = b'\x88'
@@ -87,7 +89,7 @@ def recv_timeout(the_socket, timeout=2):
                 begin=time.time()
             else:
                 #sleep for sometime to indicate a gap
-                time.sleep(0.05)
+                time.sleep(TIMEOUT_DELAY)
         except:
             pass
     
@@ -125,7 +127,7 @@ def call_method_electrum(method, params):
 
     client.sendall(bytes(json.dumps(payload) + "\n", "ascii"))
 
-    response = recv_timeout(client, timeout=0.05)
+    response = recv_timeout(client, timeout=TIMEOUT_DELAY)
     # response = client.recv(65536) # 2^16
     app.logger.info(f"METHOD: {method}, RESPONSE: {response}")
 
