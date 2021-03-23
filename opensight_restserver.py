@@ -34,7 +34,6 @@ OP_PUSH_20 = b"\x14"
 
 
 def address_to_public_key_hash(address):
-    print(f"address: {address}")
     address = convert.to_cash_address(address)
     Address = convert.Address._cash_string(address)
     return bytes(Address.payload)
@@ -101,10 +100,7 @@ def recv_timeout(the_socket, timeout=2):  # pragma: no cover
 
 def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
-    print(f"method: {method} params: {params}")
     request_headers = {"content-type": "text/plain; "}
-    print(f"data: {json.dumps(payload)}")
-
     a = requests.post(
         "http://{}:{}@{}:{}".format(
             NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
@@ -112,10 +108,7 @@ def call_method_node(method, params):
         headers=request_headers,
         data=json.dumps(payload),
     )
-    print(f"a: {a}")
     response = a.json()
-    print("\n\n")
-    print(f"call method node: {response['result']}", file=sys.stderr)
     return dict(response)["result"]
 
 
@@ -189,9 +182,7 @@ def get_block_reward(block):
 
 
 def get_tx_details(tx_hash):
-    print(f"tx_hash: {tx_hash}", file=sys.stderr)
     tx = call_method_node("getrawtransaction", [tx_hash, True])
-    print(f"\n\n call_method_tx: {tx['vin']} \n\n", file=sys.stderr)
     tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
     tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
 
@@ -204,7 +195,6 @@ def get_tx_details(tx_hash):
 
     if "blockhash" in tx:
         tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
-    print(f"tx: {tx}", file=sys.stderr)
     return tx
 
 
@@ -214,12 +204,10 @@ def get_txs_for_address(address):
     tx_history = call_method_electrum(
         "blockchain.scripthash.get_history", [script_hash]
     )
-    print(f"tx_history: {tx_history}")
     txs = {}
     txs["txs"] = [get_tx_details(tx["tx_hash"]) for tx in tx_history]
     txs["pagesTotal"] = 0
     txs["currentPage"] = 0
-    print(f"txs: {txs}")
     return txs
 
 
@@ -230,7 +218,6 @@ class EntryPoint(Resource):
 
 class AddressDetail(Resource):
     def get(self, address):
-        print(f"address: {address}")
         p2pkh_script, script_hash = script_hash_from_address(address)
 
         txs = get_txs_for_address(address)
@@ -238,7 +225,6 @@ class AddressDetail(Resource):
         balance = call_method_electrum(
             "blockchain.scripthash.get_balance", [script_hash]
         )
-        print(f"\n\nbalance electrum call: {balance}\n\n")
 
         address_details = {}
         total_balance = balance["confirmed"] + balance["unconfirmed"]
@@ -269,7 +255,6 @@ class AddressDetail(Resource):
         address_details["totalReceivedSat"] = int(total_received * 100000000)
         address_details["totalSent"] = total_sent
         address_details["totalSentSat"] = int(total_sent * 100000000)
-        print(f"address details: {address_details}")
         return address_details
 
 
@@ -286,7 +271,6 @@ class Transactions(Resource):  # pragma: no cover
         parser.add_argument("pageNum", type=str)
 
         args = parser.parse_args()
-        print(f"args: {args}", file=sys.stderr)
 
         return get_txs_for_address(args["address"])
 
@@ -300,14 +284,12 @@ class AddressUtxos(Resource):
 
         # Get current blockchain height
         best_block = call_method_node("getblockcount", [])
-        print(f"best block: {best_block}", file=sys.stderr)
         # Adjust the format of UTXOs to match what rest.bitcoin.com expects
         utxos_formatted = [
             format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
             for x in utxos
         ]
 
-        print(f"result: {utxos_formatted}", file=sys.stderr)
         return utxos_formatted
 
 
@@ -321,7 +303,6 @@ class BlockDetails(Resource):
         block["poolInfo"] = {}
 
         block["reward"] = get_block_reward(block)
-        print(f"block: {block}", file=sys.stderr)
         return block
 
 
