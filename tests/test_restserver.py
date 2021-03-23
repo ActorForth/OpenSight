@@ -38,20 +38,19 @@ def mock_electrum_connect(*args, **kwargs):
         "5" : block_hash_electrum_result
         }
     a = case.get(kwargs.get("key"), "invalid")
-    print(f"mock result: {a}")
     return a
 
 def mock_call_node(*args, **kwargs):
     case = {
-        "1" : call_node_1,
-        "2" : call_node_2,
-        "3" : transaction_call_method_1,
-        "4" : transaction_call_method_tx,
-        "5" : transaction_call_method_2,
-        "6" : block_hash_call_method_node,
+        "1": call_node_1,
+        "2": call_node_2,
+        "3": transaction_call_method_1,
+        "4": transaction_call_method_tx,
+        "5": transaction_call_method_2,
+        "6": block_hash_call_method_node,
+        "7": 229,  # best block
         }
     a = case.get(kwargs.get("key"), "invalid")
-    print(f"mock result: {a}")
     return a
 
 
@@ -91,8 +90,7 @@ class Tests:
             )
 
             result = json.loads(response.get_data(as_text=True))
-            # assert result == 1
-            assert result == {'hello': 'world'}
+            assert result == {'platform': 'opensight', 'version': '0.1.1'}
 
 
     @mock.patch("opensight_restserver.requests.post", side_effect=mocked_post)
@@ -109,20 +107,22 @@ class Tests:
            
             address = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
             url = f"/api/addr/{address}"
-            print(f"url : {url}")
             response = test_client.get(
                 url, content_type="application/json"
             )
 
             result = json.loads(response.get_data(as_text=True))
-            # assert result == 1
             assert result == address_details
     
+    @mock.patch("opensight_restserver.call_method_node")
     @mock.patch("opensight_restserver.call_method_electrum")
-    def test_addr_utxo(self, mock1):
+    def test_addr_utxo(self, mock1, mock2):
         mock1.side_effect = [
             mock_electrum_connect(key="3"),
             mock_electrum_connect(key="4")
+        ]
+        mock2.side_effect = [
+            mock_call_node(key="7")
         ]
         flask_app = app
         
@@ -150,28 +150,7 @@ class Tests:
             response = test_client.get(url, content_type="application/json")
 
             result = json.loads(response.get_data(as_text=True))
-            print(f"result: {result}", file=sys.stderr)
             assert result == transaction_tx
-
-
-    @pytest.mark.skip
-    def test_txs(self):
-        # Need to investigate whether or not this should be a post request.
-        data = {
-            "address": "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
-        }
-
-        # address = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
-
-        url = "/api/txs/"
-
-        flask_app = app
-        with flask_app.test_client(self) as test_client:
-            response = test_client.get(url, content_type="application/json")
-
-            result = json.loads(response.get_data(as_text=True))
-            print(f"result: {result}", file=sys.stderr)
-            assert result == 1
 
     @mock.patch("opensight_restserver.call_method_electrum")
     @mock.patch("opensight_restserver.call_method_node")
@@ -191,6 +170,5 @@ class Tests:
             response = test_client.get(url, content_type="application/json")
 
             result = json.loads(response.get_data(as_text=True))
-            print(f"result: {result}", file=sys.stderr)
             assert result == block_hash_result
             

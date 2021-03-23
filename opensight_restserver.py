@@ -63,7 +63,8 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
-def recv_timeout(the_socket, timeout=2):
+def recv_timeout(the_socket, timeout=2): # pragma: no cover
+    # TODO: Add a test for recv_timeout
     #make socket non blocking
     the_socket.setblocking(0)
     
@@ -314,12 +315,10 @@ class AddressUtxos(Resource):
             "blockchain.scripthash.listunspent",
             [script_hash]
         )
-        print("why no print", file=sys.stderr)
-        print(f"addressutxos utxos: {utxos}   type: {type(utxos)}", file=sys.stderr)
 
         # Get current blockchain height
         best_block =  call_method_node("getblockcount", [])
-
+        print(f"best block: {best_block}", file=sys.stderr)
         # Adjust the format of UTXOs to match what rest.bitcoin.com expects
         utxos_formatted = [
             format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
