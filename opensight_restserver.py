@@ -18,19 +18,19 @@ ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
 ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT", 50001))
 
 NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST", "bitcoind-regtest")
-NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18443)) 
+NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18443))
 NODE_RPC_USER = os.environ.get("NODE_RPC_USER", "regtest")
 NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 
-OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", '3001')
+OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", "3001")
 
 TIMEOUT_DELAY = 0.05
 
-OP_CHECKSIG = b'\xac'
-OP_DUP = b'v'
-OP_EQUALVERIFY = b'\x88'
-OP_HASH160 = b'\xa9'
-OP_PUSH_20 = b'\x14'
+OP_CHECKSIG = b"\xac"
+OP_DUP = b"v"
+OP_EQUALVERIFY = b"\x88"
+OP_HASH160 = b"\xa9"
+OP_PUSH_20 = b"\x14"
 
 
 def address_to_public_key_hash(address):
@@ -42,17 +42,16 @@ def address_to_public_key_hash(address):
 
 def script_hash_from_address(address):
     p2pkh_script: bytes = (
-        OP_DUP +
-        OP_HASH160 +
-        OP_PUSH_20 +
-        address_to_public_key_hash(address) +
-        OP_EQUALVERIFY +
-        OP_CHECKSIG
+        OP_DUP
+        + OP_HASH160
+        + OP_PUSH_20
+        + address_to_public_key_hash(address)
+        + OP_EQUALVERIFY
+        + OP_CHECKSIG
     )
-    script_sha256_reversed: str = hashlib.new(
-        'sha256',
-        p2pkh_script
-    ).digest()[::-1].hex()
+    script_sha256_reversed: str = (
+        hashlib.new("sha256", p2pkh_script).digest()[::-1].hex()
+    )
 
     return (p2pkh_script, script_sha256_reversed)
 
@@ -63,58 +62,55 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
-def recv_timeout(the_socket, timeout=2): # pragma: no cover
+def recv_timeout(the_socket, timeout=2):  # pragma: no cover
     # TODO: Add a test for recv_timeout
-    #make socket non blocking
+    # make socket non blocking
     the_socket.setblocking(0)
-    
-    #total data partwise in an array
-    total_data=[]
-    data=''
-    
-    #beginning time
-    begin=time.time()
+
+    # total data partwise in an array
+    total_data = []
+    data = ""
+
+    # beginning time
+    begin = time.time()
     while 1:
-        #if you got some data, then break after timeout
-        if total_data and time.time()-begin > timeout:
+        # if you got some data, then break after timeout
+        if total_data and time.time() - begin > timeout:
             break
-        
-        #if you got no data at all, wait a little longer, twice the timeout
-        elif time.time()-begin > timeout*2:
+
+        # if you got no data at all, wait a little longer, twice the timeout
+        elif time.time() - begin > timeout * 2:
             break
-        
-        #recv something
+
+        # recv something
         try:
-            data = the_socket.recv(8192) # 2^13
+            data = the_socket.recv(8192)  # 2^13
             if data:
                 total_data.append(data)
-                #change the beginning time for measurement
-                begin=time.time()
+                # change the beginning time for measurement
+                begin = time.time()
             else:
-                #sleep for sometime to indicate a gap
+                # sleep for sometime to indicate a gap
                 time.sleep(TIMEOUT_DELAY)
         except:
             pass
-    
-    #join all parts to make final string
-    return b''.join(total_data)
+
+    # join all parts to make final string
+    return b"".join(total_data)
 
 
 def call_method_node(method, params):
-    payload = {
-        "jsonrpc": "1.0",
-        "id": 0,
-        "method": method,
-        "params": params
-    }
+    payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     print(f"method: {method} params: {params}")
-    request_headers = {'content-type': 'text/plain; '}
+    request_headers = {"content-type": "text/plain; "}
     print(f"data: {json.dumps(payload)}")
 
     a = requests.post(
-        "http://{}:{}@{}:{}".format(NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT),
+        "http://{}:{}@{}:{}".format(
+            NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
+        ),
         headers=request_headers,
-        data=json.dumps(payload)
+        data=json.dumps(payload),
     )
     print(f"a: {a}")
     response = a.json()
@@ -139,37 +135,34 @@ def call_method_electrum(method, params):
     # response = client.recv(65536) # 2^16
     app.logger.info(f"METHOD: {method}, RESPONSE: {response}")
 
-    return dict(json.loads(response.decode()))['result']
+    return dict(json.loads(response.decode()))["result"]
 
 
 def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
     res_utxo = {}
-    res_utxo['height'] = utxo['height']
-    res_utxo['txid'] = utxo['tx_hash']
-    res_utxo['vout'] = utxo['tx_pos']
-    res_utxo['satoshis'] = utxo['value']
-    res_utxo['amount'] = utxo['value'] / 100000000.0
-    res_utxo['address'] = address
-    res_utxo['scriptPubKey'] = p2pkh_script
+    res_utxo["height"] = utxo["height"]
+    res_utxo["txid"] = utxo["tx_hash"]
+    res_utxo["vout"] = utxo["tx_pos"]
+    res_utxo["satoshis"] = utxo["value"]
+    res_utxo["amount"] = utxo["value"] / 100000000.0
+    res_utxo["address"] = address
+    res_utxo["scriptPubKey"] = p2pkh_script
 
     # tx = call_method_electrum(
     #     "blockchain.transaction.get",
     #     [utxo['tx_hash'], True]
     # )
 
-    if utxo['height'] == 0:
-        res_utxo['confirmations'] = 0
+    if utxo["height"] == 0:
+        res_utxo["confirmations"] = 0
     else:
-        res_utxo['confirmations'] = ((best_block - utxo['height']) + 1)
+        res_utxo["confirmations"] = (best_block - utxo["height"]) + 1
 
     return res_utxo
 
 
 def format_tx_vin(vin, n):
-    tx_vout = call_method_node(
-        "getrawtransaction",
-        [vin["txid"], True]
-    )
+    tx_vout = call_method_node("getrawtransaction", [vin["txid"], True])
     vin["value"] = tx_vout["vout"][vin["vout"]]["value"]
     vin["n"] = n
     vin["doubleSpentTxID"] = None
@@ -186,26 +179,23 @@ def format_tx_vout(vout):
 
 def get_block_reward(block):
     amount = 0
-    coinbase_tx = block['tx'][0]
-    tx = call_method_electrum('blockchain.transaction.get', [coinbase_tx, True])
+    coinbase_tx = block["tx"][0]
+    tx = call_method_electrum("blockchain.transaction.get", [coinbase_tx, True])
 
-    for vout in tx['vout']:
-        amount += vout['value']
+    for vout in tx["vout"]:
+        amount += vout["value"]
 
-    return (amount / 100000000.0)
+    return amount / 100000000.0
 
 
 def get_tx_details(tx_hash):
     print(f"tx_hash: {tx_hash}", file=sys.stderr)
-    tx = call_method_node(
-        "getrawtransaction",
-        [tx_hash, True]
-    )
+    tx = call_method_node("getrawtransaction", [tx_hash, True])
     print(f"\n\n call_method_tx: {tx['vin']} \n\n", file=sys.stderr)
     tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
     tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
 
-    tx.pop('hex', None)
+    tx.pop("hex", None)
 
     tx["valueIn"] = sum([vin["value"] for vin in tx["vin"]])
     tx["valueOut"] = sum([vout["value"] for vout in tx["vout"]])
@@ -213,10 +203,7 @@ def get_tx_details(tx_hash):
     tx["fees"] = tx["valueIn"] - tx["valueOut"]
 
     if "blockhash" in tx:
-        tx["blockheight"] = call_method_node(
-            "getblock",
-            [tx["blockhash"]]
-        )["height"]
+        tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
     print(f"tx: {tx}", file=sys.stderr)
     return tx
 
@@ -225,8 +212,7 @@ def get_txs_for_address(address):
     p2pkh_script, script_hash = script_hash_from_address(address)
 
     tx_history = call_method_electrum(
-        "blockchain.scripthash.get_history",
-        [script_hash]
+        "blockchain.scripthash.get_history", [script_hash]
     )
     print(f"tx_history: {tx_history}")
     txs = {}
@@ -239,7 +225,7 @@ def get_txs_for_address(address):
 
 class EntryPoint(Resource):
     def get(self):
-        return {'platform': 'opensight', 'version': '0.1.1'}
+        return {"platform": "opensight", "version": "0.1.1"}
 
 
 class AddressDetail(Resource):
@@ -250,8 +236,7 @@ class AddressDetail(Resource):
         txs = get_txs_for_address(address)
 
         balance = call_method_electrum(
-            "blockchain.scripthash.get_balance",
-            [script_hash]
+            "blockchain.scripthash.get_balance", [script_hash]
         )
         print(f"\n\nbalance electrum call: {balance}\n\n")
 
@@ -293,12 +278,12 @@ class TransactionDetail(Resource):
         return get_tx_details(transaction)
 
 
-class Transactions(Resource): # pragma: no cover
+class Transactions(Resource):  # pragma: no cover
     # broken endpoint, need to investigate
     def get(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('address', type=str)
-        parser.add_argument('pageNum', type=str)
+        parser.add_argument("address", type=str)
+        parser.add_argument("pageNum", type=str)
 
         args = parser.parse_args()
         print(f"args: {args}", file=sys.stderr)
@@ -311,13 +296,10 @@ class AddressUtxos(Resource):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
         # Get the UTXOs for the given address
-        utxos = call_method_electrum(
-            "blockchain.scripthash.listunspent",
-            [script_hash]
-        )
+        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
 
         # Get current blockchain height
-        best_block =  call_method_node("getblockcount", [])
+        best_block = call_method_node("getblockcount", [])
         print(f"best block: {best_block}", file=sys.stderr)
         # Adjust the format of UTXOs to match what rest.bitcoin.com expects
         utxos_formatted = [
@@ -343,13 +325,13 @@ class BlockDetails(Resource):
         return block
 
 
-api.add_resource(EntryPoint, '/')
-api.add_resource(AddressDetail, '/api/addr/<address>')
-api.add_resource(AddressUtxos, '/api/addr/<address>/utxo')
-api.add_resource(BlockDetails, '/api/block/<blockhash>')
-api.add_resource(TransactionDetail, '/api/tx/<transaction>')
-api.add_resource(Transactions, '/api/txs/')
+api.add_resource(EntryPoint, "/")
+api.add_resource(AddressDetail, "/api/addr/<address>")
+api.add_resource(AddressUtxos, "/api/addr/<address>/utxo")
+api.add_resource(BlockDetails, "/api/block/<blockhash>")
+api.add_resource(TransactionDetail, "/api/tx/<transaction>")
+api.add_resource(Transactions, "/api/txs/")
 
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=OPENSIGHT_PORT)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=OPENSIGHT_PORT)
