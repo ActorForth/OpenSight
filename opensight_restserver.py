@@ -2,6 +2,7 @@
 import hashlib
 import json
 import socket
+import time
 import os
 import sys
 
@@ -17,13 +18,13 @@ ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
 ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT", 50001))
 
 NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST", "bitcoind-regtest")
-# NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18332))
-NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18443))
-
+NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18443)) 
 NODE_RPC_USER = os.environ.get("NODE_RPC_USER", "regtest")
 NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 
 OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", '3001')
+
+TIMEOUT_DELAY = 0.05
 
 OP_CHECKSIG = b'\xac'
 OP_DUP = b'v'
@@ -62,6 +63,42 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
+def recv_timeout(the_socket, timeout=2):
+    #make socket non blocking
+    the_socket.setblocking(0)
+    
+    #total data partwise in an array
+    total_data=[]
+    data=''
+    
+    #beginning time
+    begin=time.time()
+    while 1:
+        #if you got some data, then break after timeout
+        if total_data and time.time()-begin > timeout:
+            break
+        
+        #if you got no data at all, wait a little longer, twice the timeout
+        elif time.time()-begin > timeout*2:
+            break
+        
+        #recv something
+        try:
+            data = the_socket.recv(8192) # 2^13
+            if data:
+                total_data.append(data)
+                #change the beginning time for measurement
+                begin=time.time()
+            else:
+                #sleep for sometime to indicate a gap
+                time.sleep(TIMEOUT_DELAY)
+        except:
+            pass
+    
+    #join all parts to make final string
+    return b''.join(total_data)
+
+
 def call_method_node(method, params):
     payload = {
         "jsonrpc": "1.0",
@@ -97,31 +134,32 @@ def call_method_electrum(method, params):
 
     client.sendall(bytes(json.dumps(payload) + "\n", "ascii"))
 
-    response = client.recv(999999999)
-    client.close()
-    print(f"result: {dict(json.loads(response.decode()))['result']}", file=sys.stderr)
+    response = recv_timeout(client, timeout=TIMEOUT_DELAY)
+    # response = client.recv(65536) # 2^16
+    app.logger.info(f"METHOD: {method}, RESPONSE: {response}")
+
     return dict(json.loads(response.decode()))['result']
 
 
-def format_utxo_from_electrum(utxo, address, p2pkh_script):
-    print(f"utxo: {utxo}", file=sys.stderr)
+def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
     res_utxo = {}
     res_utxo['height'] = utxo['height']
     res_utxo['txid'] = utxo['tx_hash']
-    res_utxo['height'] = utxo['tx_hash']
     res_utxo['vout'] = utxo['tx_pos']
     res_utxo['satoshis'] = utxo['value']
     res_utxo['amount'] = utxo['value'] / 100000000.0
     res_utxo['address'] = address
     res_utxo['scriptPubKey'] = p2pkh_script
 
-    tx = call_method_electrum(
-        "blockchain.transaction.get",
-        [utxo['tx_hash'], True]
-    )
-    print(f"tx: {tx}", file=sys.stderr)
+    # tx = call_method_electrum(
+    #     "blockchain.transaction.get",
+    #     [utxo['tx_hash'], True]
+    # )
 
-    res_utxo['confirmations'] = tx['confirmations']
+    if utxo['height'] == 0:
+        res_utxo['confirmations'] = 0
+    else:
+        res_utxo['confirmations'] = ((best_block - utxo['height']) + 1)
 
     return res_utxo
 
@@ -200,7 +238,7 @@ def get_txs_for_address(address):
 
 class EntryPoint(Resource):
     def get(self):
-        return {'hello': 'world'}
+        return {'platform': 'opensight', 'version': '0.1.1'}
 
 
 class AddressDetail(Resource):
@@ -271,6 +309,7 @@ class AddressUtxos(Resource):
     def get(self, address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
+        # Get the UTXOs for the given address
         utxos = call_method_electrum(
             "blockchain.scripthash.listunspent",
             [script_hash]
@@ -278,8 +317,12 @@ class AddressUtxos(Resource):
         print("why no print", file=sys.stderr)
         print(f"addressutxos utxos: {utxos}   type: {type(utxos)}", file=sys.stderr)
 
+        # Get current blockchain height
+        best_block =  call_method_node("getblockcount", [])
+
+        # Adjust the format of UTXOs to match what rest.bitcoin.com expects
         utxos_formatted = [
-            format_utxo_from_electrum(x, address, p2pkh_script.hex())
+            format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
             for x in utxos
         ]
 
@@ -303,10 +346,10 @@ class BlockDetails(Resource):
 
 api.add_resource(EntryPoint, '/')
 api.add_resource(AddressDetail, '/api/addr/<address>')
-api.add_resource(TransactionDetail, '/api/tx/<transaction>')
-api.add_resource(Transactions, '/api/txs/')
 api.add_resource(AddressUtxos, '/api/addr/<address>/utxo')
 api.add_resource(BlockDetails, '/api/block/<blockhash>')
+api.add_resource(TransactionDetail, '/api/tx/<transaction>')
+api.add_resource(Transactions, '/api/txs/')
 
 
 if __name__ == '__main__':
