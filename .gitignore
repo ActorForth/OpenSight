@@ -4,4 +4,8 @@ test.py
 /venv
 .coverage
 __pycache__/
+<<<<<<< Updated upstream
 settings.json
+=======
+.vscode/
+>>>>>>> Stashed changes
