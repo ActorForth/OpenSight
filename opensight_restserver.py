@@ -127,7 +127,7 @@ def call_method_electrum(method, params):
     response = recv_timeout(client, timeout=TIMEOUT_DELAY)
     # response = client.recv(65536) # 2^16
     app.logger.info(f"METHOD: {method}, RESPONSE: {response}")
-
+    
     return dict(json.loads(response.decode()))["result"]
 
 
@@ -242,7 +242,7 @@ class AddressDetail(Resource):
         total_received = 0
         txs_unconfirmed_qty = 0
         for tx in txs["txs"]:
-            if tx["confirmations"] <= 0:
+            if tx.get("confirmations", 0) <= 0:
                 txs_unconfirmed_qty += 1
             for vout in tx["vout"]:
                 if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
@@ -297,7 +297,8 @@ class BlockDetails(Resource):
     def get(self, blockhash):
 
         block = call_method_node("getblock", [blockhash, True])
-
+        if not block:
+            return "block id not found", 404
         # To investigate
         block["isMainChain"] = True
         block["poolInfo"] = {}
