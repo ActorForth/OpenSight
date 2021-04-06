@@ -27,36 +27,38 @@ from samples import (
     block_hash_call_method_node,
     block_hash_electrum_result,
     block_hash_result,
+    mocked_post_txid1,
+    mocked_post_txid2,
+    get_block_details_blockhash,
+    get_transaction_details_tx
 )
 
+ADDRESS_ENDPOINT_TEST_ADDRESS = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
 
 def mock_electrum_connect(*args, **kwargs):
     case = {
-        "1": tx_history_1,
-        "2": tx_history_balance,
-        "3": address_utxo,
-        "4": address_tx,
-        "5": block_hash_electrum_result,
+        "get_address_details_1": tx_history_1,
+        "get_address_details_2": tx_history_balance,
+        "get_utxo_for_address_1": address_utxo,
+        "get_utxo_for_address_2": address_tx,
+        "get_block_details": block_hash_electrum_result,
     }
-    a = case.get(kwargs.get("key"), "invalid")
-    return a
-
+    return case.get(kwargs.get("key"), "invalid")
 
 def mock_call_node(*args, **kwargs):
     case = {
         "1": call_node_1,
         "2": call_node_2,
-        "3": transaction_call_method_1,
-        "4": transaction_call_method_tx,
-        "5": transaction_call_method_2,
-        "6": block_hash_call_method_node,
-        "7": 229,  # best block
+        "transaction_details_1": transaction_call_method_1,
+        "transaction_details_2": transaction_call_method_tx,
+        "transaction_details_3": transaction_call_method_2,
+        "get_block_details": block_hash_call_method_node,
+        "get_utxo_for_address": 229,  # best block
     }
-    a = case.get(kwargs.get("key"), "invalid")
-    return a
-
+    return case.get(kwargs.get("key"), "invalid")
 
 def mocked_post(*args, **kwargs):
+    # Mocks the post requests to electrum for address balance and txs
     class MockResponse:
         def __init__(self, json_data, status_code):
             self.json_data = json_data
@@ -70,12 +72,12 @@ def mocked_post(*args, **kwargs):
 
     if (
         json_data["params"][0]
-        == "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce"
+        == mocked_post_txid1
     ):
         return MockResponse(call_node_1, 200)
     if (
         json_data["params"][0]
-        == "0034e7c1eac32cdcb0b2098a33f488a8ee1b814846996e786ca92f5a60fd2148"
+        == mocked_post_txid2
     ):
         return MockResponse(call_node_2, 200)
 
@@ -83,7 +85,7 @@ def mocked_post(*args, **kwargs):
 
 
 class Tests:
-    def test_default_entry(self):
+    def test_default_endpoint(self):
         flask_app = app
 
         with flask_app.test_client(self) as test_client:
@@ -97,17 +99,17 @@ class Tests:
 
     @mock.patch("opensight_restserver.requests.post", side_effect=mocked_post)
     @mock.patch("opensight_restserver.call_method_electrum")
-    def test_addr(self, mock1, mock2):
+    def test_get_address_details(self, mock1, mock2):
         mock1.side_effect = [
-            mock_electrum_connect(key="1"),
-            mock_electrum_connect(key="2"),
+            mock_electrum_connect(key="get_address_details_1"),
+            mock_electrum_connect(key="get_address_details_2"),
         ]
 
         flask_app = app
 
         with flask_app.test_client(self) as test_client:
 
-            address = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
+            address = ADDRESS_ENDPOINT_TEST_ADDRESS
             url = f"/api/addr/{address}"
             response = test_client.get(url, content_type="application/json")
 
@@ -116,16 +118,16 @@ class Tests:
 
     @mock.patch("opensight_restserver.call_method_node")
     @mock.patch("opensight_restserver.call_method_electrum")
-    def test_addr_utxo(self, mock1, mock2):
+    def test_get_utxo_for_address(self, mock1, mock2):
         mock1.side_effect = [
-            mock_electrum_connect(key="3"),
-            mock_electrum_connect(key="4"),
+            mock_electrum_connect(key="get_utxo_for_address_1"),
+            mock_electrum_connect(key="get_utxo_for_address_2"),
         ]
-        mock2.side_effect = [mock_call_node(key="7")]
+        mock2.side_effect = [mock_call_node(key="get_utxo_for_address")]
         flask_app = app
 
         with flask_app.test_client(self) as test_client:
-            address = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
+            address = ADDRESS_ENDPOINT_TEST_ADDRESS
             url = f"/api/addr/{address}/utxo"
 
             response = test_client.get(url, content_type="application/json")
@@ -135,13 +137,13 @@ class Tests:
             assert result == address_result
 
     @mock.patch("opensight_restserver.call_method_node")
-    def test_transaction(self, mock1):
+    def test_transaction_details(self, mock1):
         mock1.side_effect = [
-            mock_call_node(key="3"),
-            mock_call_node(key="4"),
-            mock_call_node(key="5"),
+            mock_call_node(key="transaction_details_1"),
+            mock_call_node(key="transaction_details_2"),
+            mock_call_node(key="transaction_details_3"),
         ]
-        transaction = "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce"
+        transaction = get_transaction_details_tx
         url = f"/api/tx/{transaction}"
         flask_app = app
         with flask_app.test_client(self) as test_client:
@@ -152,10 +154,10 @@ class Tests:
 
     @mock.patch("opensight_restserver.call_method_electrum")
     @mock.patch("opensight_restserver.call_method_node")
-    def test_txs(self, mock1, mock2):
-        mock1.side_effect = [mock_call_node(key="6")]
-        mock2.side_effect = [mock_electrum_connect(key="5")]
-        blockhash = "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf"
+    def test_get_block_details(self, mock1, mock2):
+        mock1.side_effect = [mock_call_node(key="get_block_details")]
+        mock2.side_effect = [mock_electrum_connect(key="get_block_details")]
+        blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
 

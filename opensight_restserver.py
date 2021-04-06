@@ -101,14 +101,14 @@ def recv_timeout(the_socket, timeout=2):  # pragma: no cover
 def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "text/plain; "}
-    a = requests.post(
+    response = requests.post(
         "http://{}:{}@{}:{}".format(
             NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
         ),
         headers=request_headers,
         data=json.dumps(payload),
-    )
-    response = a.json()
+    ).json()
+
     return dict(response)["result"]
 
 
