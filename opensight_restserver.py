@@ -5,14 +5,18 @@ import socket
 import time
 import os
 import sys
-
+import logging
+import random
 import requests
+
+from functools import wraps
 from cashaddress import convert
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
 from decimal import Decimal, getcontext
 
 getcontext().prec = 8
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 api = Api(app)
@@ -34,6 +38,53 @@ OP_DUP = b"v"
 OP_EQUALVERIFY = b"\x88"
 OP_HASH160 = b"\xa9"
 OP_PUSH_20 = b"\x14"
+
+
+def retry(exceptions, total_tries=4, initial_wait=0.5, backoff_factor=2, logger=None):
+    """
+    calling the decorated function applying an exponential backoff.
+    Args:
+        exceptions: Exception(s) that trigger a retry, can be a tuple
+        total_tries: Total tries
+        initial_wait: Time to first retry
+        backoff_factor: Backoff multiplier (e.g. value of 2 will double the delay each retry).
+        logger: logger to be used, if none specified print
+    """
+    def retry_decorator(f):
+        @wraps(f)
+        def func_with_retries(*args, **kwargs):
+            _tries, _delay = total_tries + 1, initial_wait
+            while _tries > 1:
+                try:
+                    log(f'{total_tries + 2 - _tries}. try:', logger)
+                    result, status = f(*args, **kwargs)
+                    if status == 200:
+                        return result
+                    continue
+                except exceptions as e:
+                    _tries -= 1
+                    print_args = args if args else 'no args'
+                    if _tries == 1:
+                        msg = str(f'Function: {f.__name__}\n'
+                                  f'Failed despite best efforts after {total_tries} tries.\n'
+                                  f'args: {print_args}, kwargs: {kwargs}')
+                        log(msg, logger)
+                        raise
+                    msg = str(f'Function: {f.__name__}\n'
+                              f'Exception: {e}\n'
+                              f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
+                    log(msg, logger)
+                    time.sleep(_delay)
+                    _delay *= backoff_factor
+
+        return func_with_retries
+    return retry_decorator
+
+def log(msg, logger=None):
+    if logger:
+        logger.warning(msg)
+    else:
+        print(msg)
 
 
 def address_to_public_key_hash(address):
@@ -218,11 +269,13 @@ def get_txs_for_address(address):
 
 
 class EntryPoint(Resource):
+    @retry(Exception, total_tries=4, logger=logger)
     def get(self):
-        return {"platform": "opensight", "version": "0.1.1"}
+        return {"platform": "opensight", "version": "0.1.1"}, 200
 
 
 class AddressDetail(Resource):
+    @retry(Exception, total_tries=4, logger=logger)
     def get(self, address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -261,12 +314,13 @@ class AddressDetail(Resource):
         address_details["totalReceivedSat"] = int(total_received * 100000000)
         address_details["totalSent"] = total_sent
         address_details["totalSentSat"] = int(total_sent * 100000000)
-        return address_details
+        return address_details, 200
 
 
 class TransactionDetail(Resource):
+    @retry(Exception, total_tries=4, logger=logger)
     def get(self, transaction):
-        return get_tx_details(transaction)
+        return get_tx_details(transaction), 200
 
 
 class Transactions(Resource):  # pragma: no cover
@@ -278,10 +332,11 @@ class Transactions(Resource):  # pragma: no cover
 
         args = parser.parse_args()
 
-        return get_txs_for_address(args["address"])
+        return get_txs_for_address(args["address"]), 200
 
 
 class AddressUtxos(Resource):
+    @retry(Exception, total_tries=4, logger=logger)
     def get(self, address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -296,10 +351,11 @@ class AddressUtxos(Resource):
             for x in utxos
         ]
 
-        return utxos_formatted
+        return utxos_formatted, 200
 
 
 class BlockDetails(Resource):
+    @retry(Exception, total_tries=4, logger=logger)
     def get(self, blockhash):
 
         block = call_method_node("getblock", [blockhash, True])
@@ -310,7 +366,7 @@ class BlockDetails(Resource):
         block["poolInfo"] = {}
 
         block["reward"] = get_block_reward(block)
-        return block
+        return block, 200
 
 
 api.add_resource(EntryPoint, "/")
