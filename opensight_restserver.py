@@ -10,6 +10,9 @@ import requests
 from cashaddress import convert
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
+from decimal import Decimal, getcontext
+
+getcontext().prec = 8
 
 app = Flask(__name__)
 api = Api(app)
@@ -188,10 +191,13 @@ def get_tx_details(tx_hash):
 
     tx.pop("hex", None)
 
-    tx["valueIn"] = sum([vin["value"] for vin in tx["vin"]])
-    tx["valueOut"] = sum([vout["value"] for vout in tx["vout"]])
+    tx["valueIn"] = sum([Decimal(str(vin["value"])) for vin in tx["vin"]])
+    tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+    tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
 
-    tx["fees"] = tx["valueIn"] - tx["valueOut"]
+    tx["valueIn"] = float(tx["valueIn"])
+    tx["valueOut"] = float(tx["valueOut"])
+    tx["fees"] = float(tx["fees"])
 
     if "blockhash" in tx:
         tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
