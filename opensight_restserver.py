@@ -61,7 +61,7 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                 try:
                     log(f'{total_tries + 2 - _tries}. try:', logger)
                     result, status = f(*args, **kwargs)
-                    if status == 200:
+                    if status in [200, 400, 404, 409]:
                         return result
                     continue
                 except exceptions as e:
@@ -240,6 +240,8 @@ def get_block_reward(block):
 
 def get_tx_details(tx_hash):
     tx = call_method_node("getrawtransaction", [tx_hash, True])
+    if not tx:
+        return "Not found", 404
     tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
     tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
 
