@@ -2,3 +2,4 @@ cashaddress
 flask
 flask_restful
 requests
+gunicorn==20.0.4
