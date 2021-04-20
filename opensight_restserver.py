@@ -212,10 +212,12 @@ def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
 
 
 def format_tx_vin(vin, n):
-    tx_vout = call_method_node("getrawtransaction", [vin["txid"], True])
-    vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
+    if not "coinbase" in vin:
+        tx_vout = call_method_node("getrawtransaction", [vin["txid"], True])
+        vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
+        vin["cashAddress"] = tx_vout["vout"][vin["vout"]]["scriptPubKey"]["addresses"][0]
+        vin["doubleSpentTxID"] = None
     vin["n"] = n
-    vin["doubleSpentTxID"] = None
     return vin
 
 
@@ -247,13 +249,17 @@ def get_tx_details(tx_hash):
 
     tx.pop("hex", None)
 
-    tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
-    tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
-    tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
+    if "coinbase" in tx["vin"][0]:
+        tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+        tx["valueOut"] = float(tx["valueOut"])
+    else:
+        tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
+        tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+        tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
 
-    tx["valueIn"] = float(tx["valueIn"])
-    tx["valueOut"] = float(tx["valueOut"])
-    tx["fees"] = float(tx["fees"])
+        tx["valueIn"] = float(tx["valueIn"])
+        tx["valueOut"] = float(tx["valueOut"])
+        tx["fees"] = float(tx["fees"])
 
     if "blockhash" in tx:
         tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
