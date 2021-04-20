@@ -213,7 +213,7 @@ def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
 
 def format_tx_vin(vin, n):
     tx_vout = call_method_node("getrawtransaction", [vin["txid"], True])
-    vin["value"] = tx_vout["vout"][vin["vout"]]["value"]
+    vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
     vin["n"] = n
     vin["doubleSpentTxID"] = None
     return vin
@@ -247,7 +247,7 @@ def get_tx_details(tx_hash):
 
     tx.pop("hex", None)
 
-    tx["valueIn"] = sum([Decimal(str(vin["value"])) for vin in tx["vin"]])
+    tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
     tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
     tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
 
