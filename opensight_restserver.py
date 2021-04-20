@@ -32,6 +32,8 @@ NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", "3001")
 
 TIMEOUT_DELAY = 0.05
+TOTAL_RETRIES = 4
+BACKOFF_FACTOR = 2
 
 OP_CHECKSIG = b"\xac"
 OP_DUP = b"v"
@@ -40,7 +42,7 @@ OP_HASH160 = b"\xa9"
 OP_PUSH_20 = b"\x14"
 
 
-def retry(exceptions, total_tries=4, initial_wait=0.5, backoff_factor=2, logger=None):
+def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, backoff_factor=BACKOFF_FACTOR, logger=None):
     """
     calling the decorated function applying an exponential backoff.
     Args:
@@ -269,13 +271,13 @@ def get_txs_for_address(address):
 
 
 class EntryPoint(Resource):
-    @retry(Exception, total_tries=4, logger=logger)
+    @retry(Exception, logger=logger)
     def get(self):
         return {"platform": "opensight", "version": "0.1.1"}, 200
 
 
 class AddressDetail(Resource):
-    @retry(Exception, total_tries=4, logger=logger)
+    @retry(Exception, logger=logger)
     def get(self, address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -310,21 +312,21 @@ class AddressDetail(Resource):
         total_sent = total_received - address_details["balance"]
 
         address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
-        address_details["totalReceived"] = total_received
+        address_details["totalReceived"] = float(Decimal(str(total_received)))
         address_details["totalReceivedSat"] = int(total_received * 100000000)
-        address_details["totalSent"] = total_sent
+        address_details["totalSent"] = float(Decimal(str(total_sent)))
         address_details["totalSentSat"] = int(total_sent * 100000000)
         return address_details, 200
 
 
 class TransactionDetail(Resource):
-    @retry(Exception, total_tries=4, logger=logger)
+    @retry(Exception, logger=logger)
     def get(self, transaction):
         return get_tx_details(transaction), 200
 
 
 class Transactions(Resource):  # pragma: no cover
-    # broken endpoint, need to investigate
+    @retry(Exception, logger=logger)
     def get(self):
         parser = reqparse.RequestParser()
         parser.add_argument("address", type=str)
@@ -336,7 +338,7 @@ class Transactions(Resource):  # pragma: no cover
 
 
 class AddressUtxos(Resource):
-    @retry(Exception, total_tries=4, logger=logger)
+    @retry(Exception, logger=logger)
     def get(self, address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -355,7 +357,7 @@ class AddressUtxos(Resource):
 
 
 class BlockDetails(Resource):
-    @retry(Exception, total_tries=4, logger=logger)
+    @retry(Exception, logger=logger)
     def get(self, blockhash):
 
         block = call_method_node("getblock", [blockhash, True])
