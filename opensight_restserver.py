@@ -274,7 +274,7 @@ def get_txs_for_address(address):
 class EntryPoint(Resource):
     @retry(Exception, logger=logger)
     def get(self):
-        return {"platform": "opensight", "version": "0.1.1"}, 200
+        return {"platform": "opensight", "version": VERSION}, 200
 
 
 class AddressDetail(Resource):
