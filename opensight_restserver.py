@@ -5,11 +5,18 @@ import socket
 import time
 import os
 import sys
-
+import logging
+import random
 import requests
+
+from functools import wraps
 from cashaddress import convert
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
+from decimal import Decimal, getcontext
+
+getcontext().prec = 8
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 api = Api(app)
@@ -25,12 +32,62 @@ NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", "3001")
 
 TIMEOUT_DELAY = 0.05
+TOTAL_RETRIES = 4
+BACKOFF_FACTOR = 2
+VERSION = "v1.0.4"
 
 OP_CHECKSIG = b"\xac"
 OP_DUP = b"v"
 OP_EQUALVERIFY = b"\x88"
 OP_HASH160 = b"\xa9"
 OP_PUSH_20 = b"\x14"
+
+
+def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, backoff_factor=BACKOFF_FACTOR, logger=None):
+    """
+    calling the decorated function applying an exponential backoff.
+    Args:
+        exceptions: Exception(s) that trigger a retry, can be a tuple
+        total_tries: Total tries
+        initial_wait: Time to first retry
+        backoff_factor: Backoff multiplier (e.g. value of 2 will double the delay each retry).
+        logger: logger to be used, if none specified print
+    """
+    def retry_decorator(f):
+        @wraps(f)
+        def func_with_retries(*args, **kwargs):
+            _tries, _delay = total_tries + 1, initial_wait
+            while _tries > 1:
+                try:
+                    log(f'{total_tries + 2 - _tries}. try:', logger)
+                    result, status = f(*args, **kwargs)
+                    if status in [200, 400, 404, 409]:
+                        return result
+                    continue
+                except exceptions as e:
+                    _tries -= 1
+                    print_args = args if args else 'no args'
+                    if _tries == 1:
+                        msg = str(f'Function: {f.__name__}\n'
+                                  f'Failed despite best efforts after {total_tries} tries.\n'
+                                  f'args: {print_args}, kwargs: {kwargs}')
+                        log(msg, logger)
+                        raise
+                    msg = str(f'Function: {f.__name__}\n'
+                              f'Exception: {e}\n'
+                              f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
+                    log(msg, logger)
+                    time.sleep(_delay)
+                    _delay *= backoff_factor
+
+        return func_with_retries
+    return retry_decorator
+
+def log(msg, logger=None):
+    if logger:
+        logger.warning(msg)
+    else:
+        print(msg)
 
 
 def address_to_public_key_hash(address):
@@ -183,15 +240,20 @@ def get_block_reward(block):
 
 def get_tx_details(tx_hash):
     tx = call_method_node("getrawtransaction", [tx_hash, True])
+    if not tx:
+        return "Not found", 404
     tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
     tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
 
     tx.pop("hex", None)
 
-    tx["valueIn"] = sum([vin["value"] for vin in tx["vin"]])
-    tx["valueOut"] = sum([vout["value"] for vout in tx["vout"]])
+    tx["valueIn"] = sum([Decimal(str(vin["value"])) for vin in tx["vin"]])
+    tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+    tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
 
-    tx["fees"] = tx["valueIn"] - tx["valueOut"]
+    tx["valueIn"] = float(tx["valueIn"])
+    tx["valueOut"] = float(tx["valueOut"])
+    tx["fees"] = float(tx["fees"])
 
     if "blockhash" in tx:
         tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
@@ -212,11 +274,13 @@ def get_txs_for_address(address):
 
 
 class EntryPoint(Resource):
+    @retry(Exception, logger=logger)
     def get(self):
-        return {"platform": "opensight", "version": "0.1.1"}
+        return {"platform": "opensight", "version": VERSION}, 200
 
 
 class AddressDetail(Resource):
+    @retry(Exception, logger=logger)
     def get(self, address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -251,20 +315,21 @@ class AddressDetail(Resource):
         total_sent = total_received - address_details["balance"]
 
         address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
-        address_details["totalReceived"] = total_received
+        address_details["totalReceived"] = float(Decimal(str(total_received)))
         address_details["totalReceivedSat"] = int(total_received * 100000000)
-        address_details["totalSent"] = total_sent
+        address_details["totalSent"] = float(Decimal(str(total_sent)))
         address_details["totalSentSat"] = int(total_sent * 100000000)
-        return address_details
+        return address_details, 200
 
 
 class TransactionDetail(Resource):
+    @retry(Exception, logger=logger)
     def get(self, transaction):
-        return get_tx_details(transaction)
+        return get_tx_details(transaction), 200
 
 
 class Transactions(Resource):  # pragma: no cover
-    # broken endpoint, need to investigate
+    @retry(Exception, logger=logger)
     def get(self):
         parser = reqparse.RequestParser()
         parser.add_argument("address", type=str)
@@ -272,10 +337,11 @@ class Transactions(Resource):  # pragma: no cover
 
         args = parser.parse_args()
 
-        return get_txs_for_address(args["address"])
+        return get_txs_for_address(args["address"]), 200
 
 
 class AddressUtxos(Resource):
+    @retry(Exception, logger=logger)
     def get(self, address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -290,10 +356,11 @@ class AddressUtxos(Resource):
             for x in utxos
         ]
 
-        return utxos_formatted
+        return utxos_formatted, 200
 
 
 class BlockDetails(Resource):
+    @retry(Exception, logger=logger)
     def get(self, blockhash):
 
         block = call_method_node("getblock", [blockhash, True])
@@ -304,7 +371,7 @@ class BlockDetails(Resource):
         block["poolInfo"] = {}
 
         block["reward"] = get_block_reward(block)
-        return block
+        return block, 200
 
 
 api.add_resource(EntryPoint, "/")
