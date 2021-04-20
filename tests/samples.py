@@ -375,8 +375,8 @@ transaction_tx = {
     ],
     "confirmations": 0,
     "time": 1615799934,
-    "valueIn": 46.99999356,
-    "valueOut": 47.99999356,
+    "valueIn": 46.999994,
+    "valueOut": 47.999994,
     "fees": -1.0,
 }
 
@@ -483,6 +483,10 @@ mocked_post_txid1 = "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8
 
 mocked_post_txid2 = "0034e7c1eac32cdcb0b2098a33f488a8ee1b814846996e786ca92f5a60fd2148"
 
-get_block_details_blockhash = "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf"
+get_block_details_blockhash = (
+    "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf"
+)
 
-get_transaction_details_tx = "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce"
+get_transaction_details_tx = (
+    "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce"
+)
