@@ -15,7 +15,7 @@ from flask import Flask
 from flask_restful import Api, Resource, reqparse
 from decimal import Decimal, getcontext
 
-getcontext().prec = 8
+getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -316,14 +316,14 @@ class AddressDetail(Resource):
                 txs_unconfirmed_qty += 1
             for vout in tx["vout"]:
                 if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
-                    total_received += vout["value"]
+                    total_received = Decimal(total_received) + Decimal(str(vout["value"]))
 
-        total_sent = total_received - address_details["balance"]
+        total_sent = total_received - Decimal(address_details["balance"])
 
         address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
-        address_details["totalReceived"] = float(Decimal(str(total_received)))
+        address_details["totalReceived"] = float(total_received)
         address_details["totalReceivedSat"] = int(total_received * 100000000)
-        address_details["totalSent"] = float(Decimal(str(total_sent)))
+        address_details["totalSent"] = float(total_sent)
         address_details["totalSentSat"] = int(total_sent * 100000000)
         return address_details, 200
 
