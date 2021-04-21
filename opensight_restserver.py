@@ -361,6 +361,7 @@ class AddressUtxos(Resource):
             format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
             for x in utxos
         ]
+        utxos_formatted.reverse()
 
         return utxos_formatted, 200
 
