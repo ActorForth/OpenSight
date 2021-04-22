@@ -31,7 +31,8 @@ NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 
 OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", "3001")
 
-TIMEOUT_DELAY = 0.05
+RETRY_TIMEOUT_DELAY = 0.05
+TIMEOUT_DELAY = 0.1
 TOTAL_RETRIES = 4
 BACKOFF_FACTOR = 2
 VERSION = "v1.0.4"
@@ -43,7 +44,7 @@ OP_HASH160 = b"\xa9"
 OP_PUSH_20 = b"\x14"
 
 
-def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, backoff_factor=BACKOFF_FACTOR, logger=None):
+def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=RETRY_TIMEOUT_DELAY, backoff_factor=BACKOFF_FACTOR, logger=None):
     """
     calling the decorated function applying an exponential backoff.
     Args:
