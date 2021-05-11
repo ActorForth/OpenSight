@@ -118,43 +118,6 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
-def recv_timeout(the_socket, timeout=2):  # pragma: no cover
-    # TODO: Add a test for recv_timeout
-    # make socket non blocking
-    the_socket.setblocking(0)
-
-    # total data partwise in an array
-    total_data = []
-    data = ""
-
-    # beginning time
-    begin = time.time()
-    while 1:
-        # if you got some data, then break after timeout
-        if total_data and time.time() - begin > timeout:
-            break
-
-        # if you got no data at all, wait a little longer, twice the timeout
-        elif time.time() - begin > timeout * 2:
-            break
-
-        # recv something
-        try:
-            data = the_socket.recv(8192)  # 2^13
-            if data:
-                total_data.append(data)
-                # change the beginning time for measurement
-                begin = time.time()
-            else:
-                # sleep for sometime to indicate a gap
-                time.sleep(TIMEOUT_DELAY)
-        except:
-            pass
-
-    # join all parts to make final string
-    return b"".join(total_data)
-
-
 def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "text/plain; "}
@@ -169,23 +132,27 @@ def call_method_node(method, params):
     return dict(response)["result"]
 
 
-def call_method_electrum(method, params):
-    payload = {
-        "method": method,
-        "params": params,
-        "jsonrpc": "2.0",
-        "id": 0,
-    }
+def call_method_electrum(method, params=None, id=0):
+    # previously had _id as a parameter. changed in code to id
+    verb = False # verbose?
+    with socket.create_connection((ELECTRUM_HOST, ELECTRUM_PORT), timeout=10.0) as sock:
+        def sndrecv(method, params=None):
+            outj = { "id" : 0, "jsonrpc" : "2.0", "method" : method, "params": params}
+            msg = json.dumps(outj, indent=None).encode("utf8") + b'\n'
+            if verb: print(f"Srv --> {msg[:2048]}")
+            sock.send(msg)
+            resp = bytearray()
+            while b'\n' not in resp:
+                resp += sock.recv(4096)
+            if verb: print(f"Srv <-- {resp[:2048]}")
+            j = json.loads(resp.decode("utf8").strip())
+            if j.get("error") or j.get("id") != id:
+                raise Exception("Error response from Fulcrum:\n\n" + (json.dumps(j.get("error"), indent=4) or j))
+            return j.get("result")
 
-    client = connect_to_tcp(ELECTRUM_HOST, ELECTRUM_PORT)
-
-    client.sendall(bytes(json.dumps(payload) + "\n", "ascii"))
-
-    response = recv_timeout(client, timeout=TIMEOUT_DELAY)
-    # response = client.recv(65536) # 2^16
-    app.logger.info(f"METHOD: {method}, RESPONSE: {response}")
-    
-    return dict(json.loads(response.decode()))["result"]
+        # global ID_NEXT
+        # reqid = ID_NEXT; ID_NEXT += 1
+        return sndrecv(method, params)
 
 
 def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
