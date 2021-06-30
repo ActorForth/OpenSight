@@ -5,3 +5,4 @@ test.py
 .coverage
 __pycache__/
 .vscode/
+.venv
