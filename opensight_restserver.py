@@ -15,16 +15,26 @@ from flask import Flask
 from flask_restful import Api, Resource, reqparse
 from decimal import Decimal, getcontext
 
+
+from pydantic.main import validate_custom_root_type
+import requests
+import os
+import logging
+
+from bitcash import wallet
+from fastapi import FastAPI, Response, WebSocket
+from pydantic import BaseModel, PositiveInt, ValidationError, validator
+
 getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-api = Api(app)
+# app = Flask(__name__)
+app = FastAPI()
 
-ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
+ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "localhost")
 ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT", 50001))
 
-NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST", "bitcoind-regtest")
+NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST", "localhost")
 NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18443))
 NODE_RPC_USER = os.environ.get("NODE_RPC_USER", "regtest")
 NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
@@ -202,7 +212,10 @@ def get_block_reward(block):
     tx = call_method_electrum("blockchain.transaction.get", [coinbase_tx, True])
 
     for vout in tx["vout"]:
-        amount += vout["value"]
+        if "vaule" in vout:
+            amount += vout["value"]
+        elif "value_satoshi":
+            amount += vout["value_satoshi"]
 
     return amount / 100000000.0
 
@@ -348,12 +361,27 @@ class BlockDetails(Resource):
         return block, 200
 
 
-api.add_resource(EntryPoint, "/")
-api.add_resource(AddressDetail, "/api/addr/<address>")
-api.add_resource(AddressUtxos, "/api/addr/<address>/utxo")
-api.add_resource(BlockDetails, "/api/block/<blockhash>")
-api.add_resource(TransactionDetail, "/api/tx/<transaction>")
-api.add_resource(Transactions, "/api/txs/")
+@app.get("/api/block/{blockhash}")
+async def block_details(blockhash, response: Response):
+    block = call_method_node("getblock", [blockhash, True])
+    if not block:
+        response.status_code = 404 
+        return {"message": "block id not found"} 
+    # To investigate
+    block["isMainChain"] = True
+    block["poolInfo"] = {}
+
+    block["reward"] = get_block_reward(block)
+    return block, 200
+    pass
+
+
+# api.add_resource(EntryPoint, "/")
+# api.add_resource(AddressDetail, "/api/addr/<address>")
+# api.add_resource(AddressUtxos, "/api/addr/<address>/utxo")
+# api.add_resource(BlockDetails, "/api/block/<blockhash>")
+# api.add_resource(TransactionDetail, "/api/tx/<transaction>")
+# api.add_resource(Transactions, "/api/txs/")
 
 
 if __name__ == "__main__":
