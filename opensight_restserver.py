@@ -326,39 +326,23 @@ class Transactions(Resource):  # pragma: no cover
         return get_txs_for_address(args["address"]), 200
 
 
-class AddressUtxos(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, address):
-        p2pkh_script, script_hash = script_hash_from_address(address)
+@app.get("/api/addr/{address}/utxo")
+async def address_utxos(address, response: Response):
+    p2pkh_script, script_hash = script_hash_from_address(address)
 
-        # Get the UTXOs for the given address
-        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
+    # Get the UTXOs for the given address
+    utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
 
-        # Get current blockchain height
-        best_block = call_method_node("getblockcount", [])
-        # Adjust the format of UTXOs to match what rest.bitcoin.com expects
-        utxos_formatted = [
-            format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
-            for x in utxos
-        ]
-        utxos_formatted.reverse()
+    # Get current blockchain height
+    best_block = call_method_node("getblockcount", [])
+    # Adjust the format of UTXOs to match what rest.bitcoin.com expects
+    utxos_formatted = [
+        format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
+        for x in utxos
+    ]
+    utxos_formatted.reverse()
 
-        return utxos_formatted, 200
-
-
-class BlockDetails(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, blockhash):
-
-        block = call_method_node("getblock", [blockhash, True])
-        if not block:
-            return "block id not found", 404
-        # To investigate
-        block["isMainChain"] = True
-        block["poolInfo"] = {}
-
-        block["reward"] = get_block_reward(block)
-        return block, 200
+    return utxos_formatted, 200
 
 
 @app.get("/api/block/{blockhash}")
@@ -373,7 +357,6 @@ async def block_details(blockhash, response: Response):
 
     block["reward"] = get_block_reward(block)
     return block, 200
-    pass
 
 
 # api.add_resource(EntryPoint, "/")
