@@ -265,47 +265,46 @@ class EntryPoint(Resource):
         return {"platform": "opensight", "version": VERSION}, 200
 
 
-class AddressDetail(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, address):
-        p2pkh_script, script_hash = script_hash_from_address(address)
+@app.get("/api/addr/{address}")
+async def address_details(address, response: Response):
+    p2pkh_script, script_hash = script_hash_from_address(address)
 
-        txs = get_txs_for_address(address)
+    txs = get_txs_for_address(address)
 
-        balance = call_method_electrum(
-            "blockchain.scripthash.get_balance", [script_hash]
-        )
+    balance = call_method_electrum(
+        "blockchain.scripthash.get_balance", [script_hash]
+    )
 
-        address_details = {}
-        total_balance = balance["confirmed"] + balance["unconfirmed"]
+    address_details = {}
+    total_balance = balance["confirmed"] + balance["unconfirmed"]
 
-        address_details["addrStr"] = address
-        address_details["balanceSat"] = total_balance
-        address_details["unconfirmedBalanceSat"] = balance["unconfirmed"]
+    address_details["addrStr"] = address
+    address_details["balanceSat"] = total_balance
+    address_details["unconfirmedBalanceSat"] = balance["unconfirmed"]
 
-        address_details["balance"] = total_balance / 100000000.0
-        address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
+    address_details["balance"] = total_balance / 100000000.0
+    address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
 
-        address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
-        address_details["txApperances"] = len(address_details["transactions"])
+    address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
+    address_details["txApperances"] = len(address_details["transactions"])
 
-        total_received = 0
-        txs_unconfirmed_qty = 0
-        for tx in txs["txs"]:
-            if tx.get("confirmations", 0) <= 0:
-                txs_unconfirmed_qty += 1
-            for vout in tx["vout"]:
-                if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
-                    total_received = Decimal(total_received) + Decimal(str(vout["value"]))
+    total_received = 0
+    txs_unconfirmed_qty = 0
+    for tx in txs["txs"]:
+        if tx.get("confirmations", 0) <= 0:
+            txs_unconfirmed_qty += 1
+        for vout in tx["vout"]:
+            if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
+                total_received = Decimal(total_received) + Decimal(str(vout["value"]))
 
-        total_sent = total_received - Decimal(address_details["balance"])
+    total_sent = total_received - Decimal(address_details["balance"])
 
-        address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
-        address_details["totalReceived"] = float(total_received)
-        address_details["totalReceivedSat"] = int(total_received * 100000000)
-        address_details["totalSent"] = float(total_sent)
-        address_details["totalSentSat"] = int(total_sent * 100000000)
-        return address_details, 200
+    address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
+    address_details["totalReceived"] = float(total_received)
+    address_details["totalReceivedSat"] = int(total_received * 100000000)
+    address_details["totalSent"] = float(total_sent)
+    address_details["totalSentSat"] = int(total_sent * 100000000)
+    return address_details, 200
 
 
 @app.get("/api/tx/{transaction}")
