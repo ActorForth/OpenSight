@@ -308,10 +308,9 @@ class AddressDetail(Resource):
         return address_details, 200
 
 
-class TransactionDetail(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, transaction):
-        return get_tx_details(transaction), 200
+@app.get("/api/tx/{transaction}")
+async def transaction_detail(transaction, response: Response):
+    return get_tx_details(transaction), 200
 
 
 @app.get("/api/txs/")
