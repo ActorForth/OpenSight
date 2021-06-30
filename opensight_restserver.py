@@ -259,9 +259,8 @@ def get_txs_for_address(address):
     return txs
 
 
-class EntryPoint(Resource):
-    @retry(Exception, logger=logger)
-    def get(self):
+@app.get("/")
+async def entry_point(response: Response):
         return {"platform": "opensight", "version": VERSION}, 200
 
 
