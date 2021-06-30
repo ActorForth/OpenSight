@@ -314,16 +314,15 @@ class TransactionDetail(Resource):
         return get_tx_details(transaction), 200
 
 
-class Transactions(Resource):  # pragma: no cover
-    @retry(Exception, logger=logger)
-    def get(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument("address", type=str)
-        parser.add_argument("pageNum", type=str)
+@app.get("/api/txs/")
+async def transactions(response: Response):
+    parser = reqparse.RequestParser()
+    parser.add_argument("address", type=str)
+    parser.add_argument("pageNum", type=str)
 
-        args = parser.parse_args()
+    args = parser.parse_args()
 
-        return get_txs_for_address(args["address"]), 200
+    return get_txs_for_address(args["address"]), 200
 
 
 @app.get("/api/addr/{address}/utxo")
