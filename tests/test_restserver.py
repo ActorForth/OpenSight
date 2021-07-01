@@ -20,6 +20,7 @@ from samples import (
     address_tx,
     address_result,
     transaction_tx,
+    transaction_tx_2,
     transaction_call_method_1,
     transaction_call_method_tx,
     transaction_call_method_2,
@@ -132,12 +133,11 @@ class Tests:
         ]
         transaction = get_transaction_details_tx
         url = f"/api/tx/{transaction}"
-        flask_app = app
-        with flask_app.test_client(self) as test_client:
-            response = test_client.get(url, content_type="application/json")
+        client = TestClient(app)
+        response = client.get(url)
+        print(response.json())
+        assert response.json() == transaction_tx_2
 
-            result = json.loads(response.get_data(as_text=True))
-            assert result == transaction_tx
 
     @mock.patch("opensight_restserver.call_method_electrum")
     @mock.patch("opensight_restserver.call_method_node")
@@ -147,10 +147,8 @@ class Tests:
         blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
+        client = TestClient(app)
+        response = client.get(url)
+        print(response.json())
+        assert response.json() == block_hash_result
 
-        flask_app = app
-        with flask_app.test_client(self) as test_client:
-            response = test_client.get(url, content_type="application/json")
-
-            result = json.loads(response.get_data(as_text=True))
-            assert result == block_hash_result
