@@ -98,16 +98,11 @@ class Tests:
             mock_electrum_connect(key="get_address_details_2"),
         ]
 
-        flask_app = app
-
-        with flask_app.test_client(self) as test_client:
-
-            address = ADDRESS_ENDPOINT_TEST_ADDRESS
-            url = f"/api/addr/{address}"
-            response = test_client.get(url, content_type="application/json")
-
-            result = json.loads(response.get_data(as_text=True))
-            assert result == address_details
+        client = TestClient(app)
+        address = ADDRESS_ENDPOINT_TEST_ADDRESS
+        url = f"/api/addr/{address}"
+        response = client.get(url)
+        assert response.json() == address_details
 
     @mock.patch("opensight_restserver.call_method_node")
     @mock.patch("opensight_restserver.call_method_electrum")
