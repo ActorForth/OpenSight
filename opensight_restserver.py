@@ -214,7 +214,7 @@ def get_block_reward(block):
     for vout in tx["vout"]:
         if "vaule" in vout:
             amount += vout["value"]
-        elif "value_satoshi":
+        elif "value_satoshi" in vout:
             amount += vout["value_satoshi"]
 
     return amount / 100000000.0
