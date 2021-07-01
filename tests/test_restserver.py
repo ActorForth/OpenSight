@@ -88,7 +88,7 @@ class Tests:
         client = TestClient(app)
         url = "/"
         response = client.get(url)
-        assert response.json()[0] == {'platform': 'opensight', 'version': 'v1.0.4'}
+        assert response.json() == {'platform': 'opensight', 'version': 'v1.0.4'}
 
     @mock.patch("opensight_restserver.requests.post", side_effect=mocked_post)
     @mock.patch("opensight_restserver.call_method_electrum")
