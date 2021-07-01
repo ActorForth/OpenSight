@@ -354,7 +354,8 @@ async def block_details(blockhash, response: Response):
     block["poolInfo"] = {}
 
     block["reward"] = get_block_reward(block)
-    return block, 200
+    response.status_code = 200 
+    return block
 
 
 # api.add_resource(EntryPoint, "/")
