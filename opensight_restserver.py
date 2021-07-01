@@ -243,7 +243,7 @@ def get_tx_details(tx_hash):
 
     if "blockhash" in tx:
         tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
-    return tx, 200
+    return tx
 
 
 def get_txs_for_address(address):
@@ -310,9 +310,13 @@ async def address_details(address, response: Response):
 
 @app.get("/api/tx/{transaction}")
 async def transaction_detail(transaction, response: Response):
-    result, status = get_tx_details(transaction)
-    response.status_code = status
+    result = get_tx_details(transaction)
+    response.status_code = 200
+    if type(result) == tuple:
+        response.status_code = result[1]
+        result = result[0]
     return result
+
 
 @app.get("/api/txs/")
 async def transactions(response: Response):
