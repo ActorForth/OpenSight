@@ -261,7 +261,8 @@ def get_txs_for_address(address):
 
 @app.get("/")
 async def entry_point(response: Response):
-        return {"platform": "opensight", "version": VERSION}, 200
+        response.status_code = 200
+        return {"platform": "opensight", "version": VERSION}
 
 
 @app.get("/api/addr/{address}")
