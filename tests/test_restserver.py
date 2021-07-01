@@ -153,10 +153,8 @@ class Tests:
         blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
+        client = TestClient(app)
+        response = client.get(url)
+        print(response.json())
+        assert response.json() == block_hash_result
 
-        flask_app = app
-        with flask_app.test_client(self) as test_client:
-            response = test_client.get(url, content_type="application/json")
-
-            result = json.loads(response.get_data(as_text=True))
-            assert result == block_hash_result
