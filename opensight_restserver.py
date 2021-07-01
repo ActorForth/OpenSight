@@ -304,7 +304,8 @@ async def address_details(address, response: Response):
     address_details["totalReceivedSat"] = int(total_received * 100000000)
     address_details["totalSent"] = float(total_sent)
     address_details["totalSentSat"] = int(total_sent * 100000000)
-    return address_details, 200
+    response.status_code = 200
+    return address_details
 
 
 @app.get("/api/tx/{transaction}")
