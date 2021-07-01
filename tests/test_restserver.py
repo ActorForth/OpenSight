@@ -2,12 +2,11 @@ import pytest
 import unittest
 from unittest import mock
 from unittest.mock import mock_open
-
-# import requests_mock
 from flask import json, current_app, jsonify
 import os
 import time
 import threading
+from fastapi.testclient import TestClient
 
 import sys
 from opensight_restserver import app
@@ -86,16 +85,10 @@ def mocked_post(*args, **kwargs):
 
 class Tests:
     def test_default_endpoint(self):
-        flask_app = app
-
-        with flask_app.test_client(self) as test_client:
-
-            data = {}
-
-            response = test_client.get("/", content_type="application/json")
-
-            result = json.loads(response.get_data(as_text=True))
-            assert result == {"platform": "opensight", "version": "0.1.1"}
+        client = TestClient(app)
+        url = "/"
+        response = client.get(url)
+        assert response.json()[0] == {'platform': 'opensight', 'version': 'v1.0.4'}
 
     @mock.patch("opensight_restserver.requests.post", side_effect=mocked_post)
     @mock.patch("opensight_restserver.call_method_electrum")
