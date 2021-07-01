@@ -380,6 +380,43 @@ transaction_tx = {
     "fees": -1.0,
 }
 
+transaction_tx_2 = {
+        'txid': '13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce',
+        'size': 225,
+        'version': 1,
+        'locktime': 229,
+        'vin': [{'txid': '0034e7c1eac32cdcb0b2098a33f488a8ee1b814846996e786ca92f5a60fd2148',
+            'vout': 1,
+            'scriptSig': {'asm': '304402202e746040d0a99e662dee4d94b2b9096ded7bf06a62c19b910faa93ec71e28f290220237f89f9051a7009545e7526bf34efe3ba5d597d874d45f8fbfecfb923883f24[ALL|FORKID] 02498122094f5f4ea52d85cf5615e58e568247e4e5cdea46299b80724696009260',
+                'hex': '47304402202e746040d0a99e662dee4d94b2b9096ded7bf06a62c19b910faa93ec71e28f290220237f89f9051a7009545e7526bf34efe3ba5d597d874d45f8fbfecfb923883f24412102498122094f5f4ea52d85cf5615e58e568247e4e5cdea46299b80724696009260'},
+            'sequence': 4294967294,
+            'valueSat': 46.99999356,
+            'cashAddress': 'bchreg:qq2m87az8x7gvv5d24g8ellhdv2y0hn3psamm0pptx',
+            'doubleSpentTxID': None,
+            'n': 0}],
+        'vout': [{'value': 1.0,
+            'n': 0,
+            'scriptPubKey': {'asm': 'OP_DUP OP_HASH160 596cd4508cd763b019bd4b83e1b4ca0fa58281a6 OP_EQUALVERIFY OP_CHECKSIG',
+                'hex': '76a914596cd4508cd763b019bd4b83e1b4ca0fa58281a688ac',
+                'reqSigs': 1,
+                'type': 'pubkeyhash',
+                'addresses': ['bchreg:qpvke4zs3ntk8vqeh49c8cd5eg86tq5p5cxqce75q9']},
+            'spentTxId': None,
+            'spentIndex': None,
+            'spentHeight': None},
+            {'value': 46.99999356,
+                'n': 1,
+                'scriptPubKey': {'asm': 'OP_DUP OP_HASH160 15b3fba239bc86328d55507cfff76b1447de710c OP_EQUALVERIFY OP_CHECKSIG',
+                    'hex': '76a91415b3fba239bc86328d55507cfff76b1447de710c88ac',
+                    'reqSigs': 1,
+                    'type': 'pubkeyhash',
+                    'addresses': ['bchreg:qq2m87az8x7gvv5d24g8ellhdv2y0hn3psamm0pptx']},
+                'spentTxId': None,
+                'spentIndex': None,
+                'spentHeight': None}],
+            'confirmations': 0,
+            'time': 1615799934, 'valueIn': 46.999994, 'valueOut': 47.999994, 'fees': -1.0
+}
 
 block_hash_call_method_node = {
     "hash": "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf",
