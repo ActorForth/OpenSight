@@ -142,7 +142,7 @@ def call_method_node(method, params):
     return dict(response)["result"]
 
 
-def call_method_electrum(method, params=None, id=0):
+def call_method_electrum(method, params=None, id=0): # pragma: no cover
     # previously had _id as a parameter. changed in code to id
     verb = False # verbose?
     with socket.create_connection((ELECTRUM_HOST, ELECTRUM_PORT), timeout=10.0) as sock:
