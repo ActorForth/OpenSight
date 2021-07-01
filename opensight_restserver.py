@@ -243,7 +243,7 @@ def get_tx_details(tx_hash):
 
     if "blockhash" in tx:
         tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
-    return tx
+    return tx, 200
 
 
 def get_txs_for_address(address):
@@ -253,7 +253,7 @@ def get_txs_for_address(address):
         "blockchain.scripthash.get_history", [script_hash]
     )
     txs = {}
-    txs["txs"] = [get_tx_details(tx["tx_hash"]) for tx in tx_history]
+    txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
     txs["pagesTotal"] = 0
     txs["currentPage"] = 0
     return txs
@@ -310,11 +310,8 @@ async def address_details(address, response: Response):
 
 @app.get("/api/tx/{transaction}")
 async def transaction_detail(transaction, response: Response):
-    result = get_tx_details(transaction)
-    response.status_code = 200
-    if type(result) == tuple:
-        response.status_code = result[1]
-        result = result[0]
+    result, status = get_tx_details(transaction)
+    response.status_code = status
     return result
 
 
