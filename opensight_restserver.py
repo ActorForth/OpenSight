@@ -339,8 +339,8 @@ async def address_utxos(address, response: Response):
         for x in utxos
     ]
     utxos_formatted.reverse()
-
-    return utxos_formatted, 200
+    response.status_code = 200
+    return utxos_formatted
 
 
 @app.get("/api/block/{blockhash}")
