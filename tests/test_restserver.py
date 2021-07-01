@@ -111,18 +111,17 @@ class Tests:
             mock_electrum_connect(key="get_utxo_for_address_1"),
             mock_electrum_connect(key="get_utxo_for_address_2"),
         ]
-        mock2.side_effect = [mock_call_node(key="get_utxo_for_address")]
-        flask_app = app
+        mock2.side_effect = [
+            mock_call_node(key="get_utxo_for_address")
+        ]
+        
+        client = TestClient(app)
+        address = ADDRESS_ENDPOINT_TEST_ADDRESS
+        url = f"/api/addr/{address}/utxo"
 
-        with flask_app.test_client(self) as test_client:
-            address = ADDRESS_ENDPOINT_TEST_ADDRESS
-            url = f"/api/addr/{address}/utxo"
+        response = client.get(url)
 
-            response = test_client.get(url, content_type="application/json")
-
-            result = json.loads(response.get_data(as_text=True))
-
-            assert result == address_result
+        assert response.json() == address_result
 
     @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details(self, mock1):
