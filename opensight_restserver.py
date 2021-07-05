@@ -4,26 +4,20 @@ import json
 import socket
 import time
 import os
-import sys
 import logging
-import random
 import requests
 
 from functools import wraps
 from cashaddress import convert
-from flask import Flask
-from flask_restful import Api, Resource, reqparse
+from flask_restful import reqparse
 from decimal import Decimal, getcontext
 
 
-from pydantic.main import validate_custom_root_type
 import requests
 import os
 import logging
 
-from bitcash import wallet
-from fastapi import FastAPI, Response, WebSocket
-from pydantic import BaseModel, PositiveInt, ValidationError, validator
+from fastapi import FastAPI, Response
 
 getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
@@ -31,10 +25,10 @@ logger = logging.getLogger(__name__)
 # app = Flask(__name__)
 app = FastAPI()
 
-ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "localhost")
+ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
 ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT", 50001))
 
-NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST", "localhost")
+NODE_RPC_HOST = os.environ.get("NODE_RPC_HOST", "bitcoind-regtest")
 NODE_RPC_PORT = int(os.environ.get("NODE_RPC_PORT", 18443))
 NODE_RPC_USER = os.environ.get("NODE_RPC_USER", "regtest")
 NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
