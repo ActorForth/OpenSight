@@ -247,13 +247,14 @@ def get_txs_for_address(address):
     txs["currentPage"] = 0
     return txs
 
-
+@retry(Exception, logger=logger)
 @app.get("/")
 async def entry_point(response: Response):
         response.status_code = 200
         return {"platform": "opensight", "version": VERSION}
 
 
+@retry(Exception, logger=logger)
 @app.get("/api/addr/{address}")
 async def address_details(address, response: Response):
     p2pkh_script, script_hash = script_hash_from_address(address)
@@ -297,6 +298,7 @@ async def address_details(address, response: Response):
     return address_details
 
 
+@retry(Exception, logger=logger)
 @app.get("/api/tx/{transaction}")
 async def transaction_detail(transaction, response: Response):
     result, status = get_tx_details(transaction)
@@ -304,6 +306,7 @@ async def transaction_detail(transaction, response: Response):
     return result
 
 
+@retry(Exception, logger=logger)
 @app.get("/api/txs/")
 async def transactions(response: Response):
     parser = reqparse.RequestParser()
@@ -315,6 +318,7 @@ async def transactions(response: Response):
     return get_txs_for_address(args["address"]), 200
 
 
+@retry(Exception, logger=logger)
 @app.get("/api/addr/{address}/utxo")
 async def address_utxos(address, response: Response):
     p2pkh_script, script_hash = script_hash_from_address(address)
@@ -334,6 +338,7 @@ async def address_utxos(address, response: Response):
     return utxos_formatted
 
 
+@retry(Exception, logger=logger)
 @app.get("/api/block/{blockhash}")
 async def block_details(blockhash, response: Response):
     block = call_method_node("getblock", [blockhash, True])
