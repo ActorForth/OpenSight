@@ -1,14 +1,7 @@
-import pytest
-import unittest
 from unittest import mock
-from unittest.mock import mock_open
-from flask import json, current_app, jsonify
-import os
-import time
-import threading
+from flask import json
 from fastapi.testclient import TestClient
 
-import sys
 from opensight_restserver import app
 from samples import (
     tx_history_1,
@@ -19,7 +12,6 @@ from samples import (
     address_utxo,
     address_tx,
     address_result,
-    transaction_tx,
     transaction_tx_2,
     transaction_call_method_1,
     transaction_call_method_tx,
