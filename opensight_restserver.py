@@ -12,11 +12,6 @@ from cashaddress import convert
 from flask_restful import reqparse
 from decimal import Decimal, getcontext
 
-
-import requests
-import os
-import logging
-
 from fastapi import FastAPI, Response
 
 getcontext().prec = 8 # Decimal precision

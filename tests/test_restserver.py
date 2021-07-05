@@ -1,8 +1,9 @@
 from unittest import mock
 from flask import json
 from fastapi.testclient import TestClient
+import logging
 
-from opensight_restserver import app
+from opensight_restserver import app, log
 from samples import (
     tx_history_1,
     tx_history_balance,
@@ -144,3 +145,9 @@ class Tests:
         print(response.json())
         assert response.json() == block_hash_result
 
+    def test_log_if(self):
+        log("beat_test_log_lol_>////<")
+
+    def test_log_else(self):
+        logger = logging.getLogger(__name__)
+        log("beat_test_log_lol_>////<", logger)
