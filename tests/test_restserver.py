@@ -3,7 +3,7 @@ from flask import json
 from fastapi.testclient import TestClient
 import logging
 
-from opensight_restserver import app, log
+from opensight_restserver import app, get_tx_details, log
 from samples import (
     tx_history_1,
     tx_history_balance,
@@ -47,6 +47,7 @@ def mock_call_node(*args, **kwargs):
         "transaction_details_3": transaction_call_method_2,
         "get_block_details": block_hash_call_method_node,
         "get_utxo_for_address": 229,  # best block
+        "empty": 0
     }
     return case.get(kwargs.get("key"), "invalid")
 
@@ -151,3 +152,12 @@ class Tests:
     def test_log_else(self):
         logger = logging.getLogger(__name__)
         log("beat_test_log_lol_>////<", logger)
+
+    @mock.patch("opensight_restserver.call_method_node")
+    def test_get_tx_details_404(self,mock1):
+        mock1.side_effect = [
+            mock_call_node(key ="empty")
+        ]
+        result, status = get_tx_details("thank")
+        assert result == "Not found"
+        assert status == 404
