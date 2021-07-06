@@ -40,45 +40,45 @@ OP_HASH160 = b"\xa9"
 OP_PUSH_20 = b"\x14"
 
 
-def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, backoff_factor=BACKOFF_FACTOR, logger=None):
-    """
-    calling the decorated function applying an exponential backoff.
-    Args:
-        exceptions: Exception(s) that trigger a retry, can be a tuple
-        total_tries: Total tries
-        initial_wait: Time to first retry
-        backoff_factor: Backoff multiplier (e.g. value of 2 will double the delay each retry).
-        logger: logger to be used, if none specified print
-    """
-    def retry_decorator(f):
-        @wraps(f)
-        def func_with_retries(*args, **kwargs):
-            _tries, _delay = total_tries + 1, initial_wait
-            while _tries > 1:
-                try:
-                    log(f'{total_tries + 2 - _tries}. try:', logger)
-                    result, status = f(*args, **kwargs)
-                    if status in [200, 400, 404, 409]:
-                        return result
-                    continue
-                except exceptions as e:
-                    _tries -= 1
-                    print_args = args if args else 'no args'
-                    if _tries == 1:
-                        msg = str(f'Function: {f.__name__}\n'
-                                  f'Failed despite best efforts after {total_tries} tries.\n'
-                                  f'args: {print_args}, kwargs: {kwargs}')
-                        log(msg, logger)
-                        raise
-                    msg = str(f'Function: {f.__name__}\n'
-                              f'Exception: {e}\n'
-                              f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
-                    log(msg, logger)
-                    time.sleep(_delay)
-                    _delay *= backoff_factor
+# def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, backoff_factor=BACKOFF_FACTOR, logger=None):
+#     """
+#     calling the decorated function applying an exponential backoff.
+#     Args:
+#         exceptions: Exception(s) that trigger a retry, can be a tuple
+#         total_tries: Total tries
+#         initial_wait: Time to first retry
+#         backoff_factor: Backoff multiplier (e.g. value of 2 will double the delay each retry).
+#         logger: logger to be used, if none specified print
+#     """
+#     def retry_decorator(f):
+#         @wraps(f)
+#         def func_with_retries(*args, **kwargs):
+#             _tries, _delay = total_tries + 1, initial_wait
+#             while _tries > 1:
+#                 try:
+#                     log(f'{total_tries + 2 - _tries}. try:', logger)
+#                     result, status = f(*args, **kwargs)
+#                     if status in [200, 400, 404, 409]:
+#                         return result
+#                     continue
+#                 except exceptions as e:
+#                     _tries -= 1
+#                     print_args = args if args else 'no args'
+#                     if _tries == 1:
+#                         msg = str(f'Function: {f.__name__}\n'
+#                                   f'Failed despite best efforts after {total_tries} tries.\n'
+#                                   f'args: {print_args}, kwargs: {kwargs}')
+#                         log(msg, logger)
+#                         raise
+#                     msg = str(f'Function: {f.__name__}\n'
+#                               f'Exception: {e}\n'
+#                               f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
+#                     log(msg, logger)
+#                     time.sleep(_delay)
+#                     _delay *= backoff_factor
 
-        return func_with_retries
-    return retry_decorator
+#         return func_with_retries
+#     return retry_decorator
 
 def log(msg, logger=None):
     if logger:
@@ -246,14 +246,14 @@ def get_txs_for_address(address):
     return txs
 
 
-@retry(Exception, logger=logger)
+# @retry(Exception, logger=logger)
 @app.get("/")
 async def entry_point(response: Response):
         response.status_code = 200
         return {"platform": "opensight", "version": VERSION}
 
 
-@retry(Exception, logger=logger)
+# @retry(Exception, logger=logger)
 @app.get("/api/addr/{address}")
 async def address_details(address, response: Response):
     p2pkh_script, script_hash = script_hash_from_address(address)
@@ -297,7 +297,7 @@ async def address_details(address, response: Response):
     return address_details
 
 
-@retry(Exception, logger=logger) # this one works
+# @retry(Exception, logger=logger) # this one works
 @app.get("/api/tx/{transaction}")
 async def transaction_detail(transaction, response: Response):
     result, status = get_tx_details(transaction)
@@ -305,7 +305,7 @@ async def transaction_detail(transaction, response: Response):
     return result
 
 
-@retry(Exception, logger=logger)
+# @retry(Exception, logger=logger)
 @app.get("/api/txs/")
 async def transactions(response: Response, address=None, pageNum=None):
     if address==None:
@@ -315,7 +315,7 @@ async def transactions(response: Response, address=None, pageNum=None):
     return result
 
 
-@retry(Exception, logger=logger)
+# @retry(Exception, logger=logger)
 @app.get("/api/addr/{address}/utxo")
 async def address_utxos(address, response: Response):
     p2pkh_script, script_hash = script_hash_from_address(address)
@@ -335,7 +335,7 @@ async def address_utxos(address, response: Response):
     return utxos_formatted
 
 
-@retry(Exception, logger=logger)
+# @retry(Exception, logger=logger)
 @app.get("/api/block/{blockhash}") # this one works
 async def block_details(blockhash, response: Response):
     block = call_method_node("getblock", [blockhash, True])
