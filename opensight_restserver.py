@@ -9,7 +9,6 @@ import requests
 
 from functools import wraps
 from cashaddress import convert
-from flask_restful import reqparse
 from decimal import Decimal, getcontext
 
 from fastapi import FastAPI, Response
@@ -17,7 +16,6 @@ from fastapi import FastAPI, Response
 getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
 
-# app = Flask(__name__)
 app = FastAPI()
 
 ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
@@ -247,6 +245,7 @@ def get_txs_for_address(address):
     txs["currentPage"] = 0
     return txs
 
+
 @retry(Exception, logger=logger)
 @app.get("/")
 async def entry_point(response: Response):
@@ -298,7 +297,7 @@ async def address_details(address, response: Response):
     return address_details
 
 
-@retry(Exception, logger=logger)
+@retry(Exception, logger=logger) # this one works
 @app.get("/api/tx/{transaction}")
 async def transaction_detail(transaction, response: Response):
     result, status = get_tx_details(transaction)
@@ -308,14 +307,12 @@ async def transaction_detail(transaction, response: Response):
 
 @retry(Exception, logger=logger)
 @app.get("/api/txs/")
-async def transactions(response: Response):
-    parser = reqparse.RequestParser()
-    parser.add_argument("address", type=str)
-    parser.add_argument("pageNum", type=str)
-
-    args = parser.parse_args()
-
-    return get_txs_for_address(args["address"]), 200
+async def transactions(response: Response, address=None, pageNum=None):
+    if address==None:
+        response.status_code = 400
+        return "no address found"
+    result = get_txs_for_address(address)
+    return result
 
 
 @retry(Exception, logger=logger)
@@ -339,7 +336,7 @@ async def address_utxos(address, response: Response):
 
 
 @retry(Exception, logger=logger)
-@app.get("/api/block/{blockhash}")
+@app.get("/api/block/{blockhash}") # this one works
 async def block_details(blockhash, response: Response):
     block = call_method_node("getblock", [blockhash, True])
     if not block:
@@ -353,14 +350,3 @@ async def block_details(blockhash, response: Response):
     response.status_code = 200 
     return block
 
-
-# api.add_resource(EntryPoint, "/")
-# api.add_resource(AddressDetail, "/api/addr/<address>")
-# api.add_resource(AddressUtxos, "/api/addr/<address>/utxo")
-# api.add_resource(BlockDetails, "/api/block/<blockhash>")
-# api.add_resource(TransactionDetail, "/api/tx/<transaction>")
-# api.add_resource(Transactions, "/api/txs/")
-
-
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=OPENSIGHT_PORT)
