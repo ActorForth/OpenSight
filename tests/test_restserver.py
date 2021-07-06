@@ -3,7 +3,7 @@ from flask import json
 from fastapi.testclient import TestClient
 import logging
 
-from opensight_restserver import app, format_tx_vin, get_tx_details, log
+from opensight_restserver import app, format_tx_vin, format_utxo_from_electrum, get_tx_details, log
 from samples import (
     tx_history_1,
     tx_history_balance,
@@ -169,14 +169,31 @@ class Tests:
         ]
         vin = {
             "coinbase": " ",
-            "txid": "HA",
-            "valueSat": "PP",
+            "txid": " ",
+            "valueSat": " ",
             "vout": 0,
-            "value": "Y",
-            "cashAddress": "Yeah!!!",
-            "scriptPubKey": "m",
-            "addresses": "e",
-            "doubleSpentTxID": "tree"
+            "value": " ",
+            "cashAddress": " ",
+            "scriptPubKey": " ",
+            "addresses": " ",
+            "doubleSpentTxID": " "
         }
         n = " "
-        result = format_tx_vin(vin, n)
+        format_tx_vin(vin, n)
+
+    @mock.patch("opensight_restserver.call_method_electrum")
+    def test_format_utxo_from_electrum(self,mock1):
+        mock1.side_effect = [
+            mock_electrum_connect(key="get_utxo_for_address_1")
+        ]
+        utxo = {
+            "height": 2,
+            "tx_hash": " ",
+            "tx_pos": " ",
+            "value": 1000000000,
+            "value": 100000000,
+        }
+        best_block = 10
+        address = " "
+        p2pkh_script = " "
+        format_utxo_from_electrum(utxo, best_block, address, p2pkh_script)
