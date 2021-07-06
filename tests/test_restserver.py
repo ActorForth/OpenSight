@@ -3,7 +3,7 @@ from flask import json
 from fastapi.testclient import TestClient
 import logging
 
-from opensight_restserver import app, get_tx_details, log
+from opensight_restserver import app, format_tx_vin, get_tx_details, log
 from samples import (
     tx_history_1,
     tx_history_balance,
@@ -154,10 +154,29 @@ class Tests:
         log("beat_test_log_lol_>////<", logger)
 
     @mock.patch("opensight_restserver.call_method_node")
-    def test_get_tx_details_404(self,mock1):
+    def test_get_tx_details_404(self, mock1):
         mock1.side_effect = [
-            mock_call_node(key ="empty")
+            mock_call_node(key = "empty")
         ]
         result, status = get_tx_details("thank")
         assert result == "Not found"
         assert status == 404
+
+    @mock.patch("opensight_restserver.call_method_node")
+    def test_format_tx_vin(self, mock1):
+        mock1.side_effect = [
+            mock_call_node(key="transaction_details_2")
+        ]
+        vin = {
+            "coinbase": " ",
+            "txid": "HA",
+            "valueSat": "PP",
+            "vout": 0,
+            "value": "Y",
+            "cashAddress": "Yeah!!!",
+            "scriptPubKey": "m",
+            "addresses": "e",
+            "doubleSpentTxID": "tree"
+        }
+        n = " "
+        result = format_tx_vin(vin, n)
