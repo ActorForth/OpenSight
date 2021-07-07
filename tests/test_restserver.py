@@ -197,3 +197,10 @@ class Tests:
         address = " "
         p2pkh_script = " "
         format_utxo_from_electrum(utxo, best_block, address, p2pkh_script)
+
+    def test_transactions_not_found(self):
+        url = "/api/txs/"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == "address cannot be empty"
+        assert response.status_code == 400
