@@ -489,7 +489,7 @@ block_hash_result = {
     "previousblockhash": "55ea7e06280023e6e3fe65a8241664112f181b97295ab09a42f2bcef9e19ad46",
     "isMainChain": True,
     "poolInfo": {},
-    "reward": 0,
+    "reward": 50.00002108,
 }
 result: {
     "hash": "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf",
