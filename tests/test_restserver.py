@@ -208,7 +208,8 @@ class Tests:
     @mock.patch("opensight_restserver.get_txs_for_address")
     def test_transactions_with_mock(self,mock1):
         mock1.side_effect = [
-            mock_electrum_connect(key="get_utxo_for_address_2")
+            # mock_electrum_connect(key="get_utxo_for_address_2")
+            (address_tx, 200)
         ]
         url = "/api/txs/?address=test_address"
         client = TestClient(app)

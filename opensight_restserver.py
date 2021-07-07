@@ -57,9 +57,9 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
             while _tries > 1:
                 try:
                     log(f'{total_tries + 2 - _tries}. try:', logger)
-                    result = await f(*args, **kwargs)
+                    result, status = await f(*args, **kwargs)
                     print(f"result:\n{result}")
-                    # print(f"status:\n{status}")
+                    print(f"status:\n{status}")
                     if status in [200, 400, 404, 409]:
                         return result
                     continue
@@ -236,16 +236,19 @@ def get_tx_details(tx_hash):
 
 
 def get_txs_for_address(address):
-    p2pkh_script, script_hash = script_hash_from_address(address)
+    try:
+        p2pkh_script, script_hash = script_hash_from_address(address)
 
-    tx_history = call_method_electrum(
-        "blockchain.scripthash.get_history", [script_hash]
-    )
-    txs = {}
-    txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
-    txs["pagesTotal"] = 0
-    txs["currentPage"] = 0
-    return txs
+        tx_history = call_method_electrum(
+            "blockchain.scripthash.get_history", [script_hash]
+        )
+        txs = {}
+        txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
+        txs["pagesTotal"] = 0
+        txs["currentPage"] = 0
+        return txs, 200
+    except Exception as e:
+        return e, 500
 
 @retry(Exception, logger=logger)
 async def get_block_details(blockhash):
@@ -323,12 +326,12 @@ async def transaction_detail(transaction, response: Response):
 
 
 @app.get("/api/txs/")
-@retry(Exception, logger=logger)
 async def transactions(response: Response, address=None, pageNum=None):
     if address==None:
         response.status_code = 400
         return "address cannot be empty"
-    result = get_txs_for_address(address)
+    result, status = get_txs_for_address(address)
+    response.status_code = status
     return result
 
 
@@ -354,7 +357,19 @@ async def address_utxos(address, response: Response):
 
 @app.get("/api/block/{blockhash}")
 async def block_details(blockhash, response: Response):
-    result, status = await get_block_details(blockhash)
-    response.status_code = status
-    return result
+    # for some reason I cant get with 2 variables
+    # therefore I'm gonna indice instead
+    # this thing is toying with me .....
+    result = await get_block_details(blockhash)
+    print("=============================================")
+    print(result)
+    the_block_data = result[0]
+    the_status_code = result[1]
+    print("=============================================")
+    print(result)
+    print(the_block_data)
+    print(the_status_code)
+    print("=============================================")
+    response.status_code = the_status_code
+    return the_block_data
 
