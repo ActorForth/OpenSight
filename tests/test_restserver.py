@@ -204,3 +204,14 @@ class Tests:
         response = client.get(url)
         assert response.json() == "address cannot be empty"
         assert response.status_code == 400
+
+    @mock.patch("opensight_restserver.get_txs_for_address")
+    def test_transactions_with_mock(self,mock1):
+        mock1.side_effect = [
+            mock_electrum_connect(key="get_utxo_for_address_2")
+        ]
+        url = "/api/txs/?address=test_address"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == address_tx
+        assert response.status_code == 200
