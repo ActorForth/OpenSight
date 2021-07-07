@@ -310,7 +310,7 @@ async def transaction_detail(transaction, response: Response):
 async def transactions(response: Response, address=None, pageNum=None):
     if address==None:
         response.status_code = 400
-        return "no address found"
+        return "address cannot be empty"
     result = get_txs_for_address(address)
     return result
 
