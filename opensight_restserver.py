@@ -247,6 +247,22 @@ def get_txs_for_address(address):
     txs["currentPage"] = 0
     return txs
 
+@retry(Exception, logger=logger)
+async def get_block_details(blockhash):
+    try:
+        block = call_method_node("getblock", [blockhash, True])
+        if not block:
+            status = 404 
+            return {"message": "block id not found"}, status
+        # To investigate
+        block["isMainChain"] = True
+        block["poolInfo"] = {}
+
+        block["reward"] = get_block_reward(block)
+        status = 200
+        return block, status
+    except Exception as e:
+        return e, 500
 
 @app.get("/")
 async def entry_point(response: Response):
@@ -336,18 +352,9 @@ async def address_utxos(address, response: Response):
     return utxos_formatted
 
 
-@app.get("/api/block/{blockhash}") # this one works
-@retry(Exception, logger=logger)
+@app.get("/api/block/{blockhash}")
 async def block_details(blockhash, response: Response):
-    block = call_method_node("getblock", [blockhash, True])
-    if not block:
-        response.status_code = 404 
-        return {"message": "block id not found"} 
-    # To investigate
-    block["isMainChain"] = True
-    block["poolInfo"] = {}
-
-    block["reward"] = get_block_reward(block)
-    response.status_code = 200 
-    return block
+    result, status = await get_block_details(blockhash)
+    response.status_code = status
+    return result
 
