@@ -199,7 +199,7 @@ def get_block_reward(block):
     tx = call_method_electrum("blockchain.transaction.get", [coinbase_tx, True])
 
     for vout in tx["vout"]:
-        if "vaule" in vout:
+        if "value" in vout:
             amount += vout["value"]
         elif "value_satoshi" in vout:
             amount += vout["value_satoshi"]

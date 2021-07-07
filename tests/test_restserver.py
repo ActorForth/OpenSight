@@ -1,5 +1,5 @@
 from unittest import mock
-from flask import json
+import json
 from fastapi.testclient import TestClient
 import logging
 
