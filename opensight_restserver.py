@@ -61,7 +61,7 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                     print(f"result:\n{result}")
                     print(f"status:\n{status}")
                     if status in [200, 400, 404, 409]:
-                        return result
+                        return result, status
                     continue
                 except exceptions as e:
                     _tries -= 1
@@ -210,29 +210,32 @@ def get_block_reward(block):
 
 
 def get_tx_details(tx_hash):
-    tx = call_method_node("getrawtransaction", [tx_hash, True])
-    if not tx:
-        return "Not found", 404
-    tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
-    tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
+    try:
+        tx = call_method_node("getrawtransaction", [tx_hash, True])
+        if not tx:
+            return "Not found", 404
+        tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
+        tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
 
-    tx.pop("hex", None)
+        tx.pop("hex", None)
 
-    if "coinbase" in tx["vin"][0]:
-        tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
-        tx["valueOut"] = float(tx["valueOut"])
-    else:
-        tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
-        tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
-        tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
+        if "coinbase" in tx["vin"][0]:
+            tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+            tx["valueOut"] = float(tx["valueOut"])
+        else:
+            tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
+            tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+            tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
 
-        tx["valueIn"] = float(tx["valueIn"])
-        tx["valueOut"] = float(tx["valueOut"])
-        tx["fees"] = float(tx["fees"])
+            tx["valueIn"] = float(tx["valueIn"])
+            tx["valueOut"] = float(tx["valueOut"])
+            tx["fees"] = float(tx["fees"])
 
-    if "blockhash" in tx:
-        tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
-    return tx, 200
+        if "blockhash" in tx:
+            tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
+        return tx, 200
+    except Exception as e:
+        return e, 500
 
 
 def get_txs_for_address(address):
@@ -273,52 +276,65 @@ async def entry_point(response: Response):
         return {"platform": "opensight", "version": VERSION}
 
 
-@app.get("/api/addr/{address}")
 @retry(Exception, logger=logger)
+async def get_address_details(address):
+    try:
+        p2pkh_script, script_hash = script_hash_from_address(address)
+
+        txs = get_txs_for_address(address)
+        if txs[1] != 200:
+            return txs[0], txs[1]
+
+        txs = txs[0] #txs is tuple with status_code
+
+        balance = call_method_electrum(
+            "blockchain.scripthash.get_balance", [script_hash]
+        )
+        address_details = {}
+        total_balance = balance["confirmed"] + balance["unconfirmed"]
+
+        print("beat here ]]]]]]]]]]]]")
+        print(f"balance:\n{balance}")
+        print(f"txs:\n{txs}")
+        address_details["addrStr"] = address
+        address_details["balanceSat"] = total_balance
+        address_details["unconfirmedBalanceSat"] = balance["unconfirmed"]
+
+        address_details["balance"] = total_balance / 100000000.0
+        address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
+
+        address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
+        address_details["txApperances"] = len(address_details["transactions"])
+        print(address_details)
+        print("before FOR")
+        total_received = 0
+        txs_unconfirmed_qty = 0
+        for tx in txs["txs"]:
+            print("inside FOR")
+            if tx.get("confirmations", 0) <= 0:
+                txs_unconfirmed_qty += 1
+            for vout in tx["vout"]:
+                if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
+                    total_received = Decimal(total_received) + Decimal(str(vout["value"]))
+
+        total_sent = total_received - Decimal(address_details["balance"])
+
+        address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
+        address_details["totalReceived"] = float(total_received)
+        address_details["totalReceivedSat"] = int(total_received * 100000000)
+        address_details["totalSent"] = float(total_sent)
+        address_details["totalSentSat"] = int(total_sent * 100000000)
+        return address_details, 200
+    except Exception as e:
+        return e, 500
+
+@app.get("/api/addr/{address}")
 async def address_details(address, response: Response):
-    p2pkh_script, script_hash = script_hash_from_address(address)
-
-    txs = get_txs_for_address(address)
-
-    balance = call_method_electrum(
-        "blockchain.scripthash.get_balance", [script_hash]
-    )
-
-    address_details = {}
-    total_balance = balance["confirmed"] + balance["unconfirmed"]
-
-    address_details["addrStr"] = address
-    address_details["balanceSat"] = total_balance
-    address_details["unconfirmedBalanceSat"] = balance["unconfirmed"]
-
-    address_details["balance"] = total_balance / 100000000.0
-    address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
-
-    address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
-    address_details["txApperances"] = len(address_details["transactions"])
-
-    total_received = 0
-    txs_unconfirmed_qty = 0
-    for tx in txs["txs"]:
-        if tx.get("confirmations", 0) <= 0:
-            txs_unconfirmed_qty += 1
-        for vout in tx["vout"]:
-            if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
-                total_received = Decimal(total_received) + Decimal(str(vout["value"]))
-
-    total_sent = total_received - Decimal(address_details["balance"])
-
-    address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
-    address_details["totalReceived"] = float(total_received)
-    address_details["totalReceivedSat"] = int(total_received * 100000000)
-    address_details["totalSent"] = float(total_sent)
-    address_details["totalSentSat"] = int(total_sent * 100000000)
-    response.status_code = 200
-    return address_details
-
+    result, status = await get_address_details(address)
+    response.status_code = status
+    return result
 
 @app.get("/api/tx/{transaction}")
-@retry(Exception, logger=logger) # this one works
 async def transaction_detail(transaction, response: Response):
     result, status = get_tx_details(transaction)
     response.status_code = status
@@ -335,41 +351,34 @@ async def transactions(response: Response, address=None, pageNum=None):
     return result
 
 
-@app.get("/api/addr/{address}/utxo")
 @retry(Exception, logger=logger)
+async def get_address_utxos(address):
+    try:
+        p2pkh_script, script_hash = script_hash_from_address(address)
+
+        # Get the UTXOs for the given address
+        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
+
+        # Get current blockchain height
+        best_block = call_method_node("getblockcount", [])
+        # Adjust the format of UTXOs to match what rest.bitcoin.com expects
+        utxos_formatted = [
+            format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
+            for x in utxos
+        ]
+        utxos_formatted.reverse()
+        return utxos_formatted, 200
+    except Exception as e:
+        return e, 500
+
+@app.get("/api/addr/{address}/utxo")
 async def address_utxos(address, response: Response):
-    p2pkh_script, script_hash = script_hash_from_address(address)
-
-    # Get the UTXOs for the given address
-    utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
-
-    # Get current blockchain height
-    best_block = call_method_node("getblockcount", [])
-    # Adjust the format of UTXOs to match what rest.bitcoin.com expects
-    utxos_formatted = [
-        format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
-        for x in utxos
-    ]
-    utxos_formatted.reverse()
-    response.status_code = 200
-    return utxos_formatted
-
+    result, status = await get_address_utxos(address)
+    response.status_code = status
+    return result
 
 @app.get("/api/block/{blockhash}")
 async def block_details(blockhash, response: Response):
-    # for some reason I cant get with 2 variables
-    # therefore I'm gonna indice instead
-    # this thing is toying with me .....
-    result = await get_block_details(blockhash)
-    print("=============================================")
-    print(result)
-    the_block_data = result[0]
-    the_status_code = result[1]
-    print("=============================================")
-    print(result)
-    print(the_block_data)
-    print(the_status_code)
-    print("=============================================")
-    response.status_code = the_status_code
-    return the_block_data
-
+    result, status = await get_block_details(blockhash)
+    response.status_code = status
+    return result
