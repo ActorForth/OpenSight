@@ -6,6 +6,7 @@ import time
 import os
 import logging
 import requests
+import sys
 
 from functools import wraps
 from cashaddress import convert
@@ -56,10 +57,9 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
             _tries, _delay = total_tries + 1, initial_wait
             while _tries > 1:
                 try:
+                    _tries -= 1
                     log(f'{total_tries + 2 - _tries}. try:', logger)
                     result, status = await f(*args, **kwargs)
-                    print(f"result:\n{result}")
-                    print(f"status:\n{status}")
                     if status in [200, 400, 404, 409]:
                         return result, status
                     continue
@@ -71,13 +71,14 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                                   f'Failed despite best efforts after {total_tries} tries.\n'
                                   f'args: {print_args}, kwargs: {kwargs}')
                         log(msg, logger)
-                        raise
+                        return e, 500
                     msg = str(f'Function: {f.__name__}\n'
                               f'Exception: {e}\n'
                               f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
                     log(msg, logger)
                     time.sleep(_delay)
                     _delay *= backoff_factor
+            return result, status
 
         return func_with_retries
     return retry_decorator
@@ -268,6 +269,27 @@ async def get_block_details(blockhash):
         status = 200
         return block, status
     except Exception as e:
+        raise Exception("get_block_error")
+        return e, 500
+
+@retry(Exception, logger=logger)
+async def get_address_utxos(address):
+    try:
+        p2pkh_script, script_hash = script_hash_from_address(address)
+
+        # Get the UTXOs for the given address
+        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
+
+        # Get current blockchain height
+        best_block = call_method_node("getblockcount", [])
+        # Adjust the format of UTXOs to match what rest.bitcoin.com expects
+        utxos_formatted = [
+            format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
+            for x in utxos
+        ]
+        utxos_formatted.reverse()
+        return utxos_formatted, 200
+    except Exception as e:
         return e, 500
 
 @app.get("/")
@@ -350,26 +372,6 @@ async def transactions(response: Response, address=None, pageNum=None):
     response.status_code = status
     return result
 
-
-@retry(Exception, logger=logger)
-async def get_address_utxos(address):
-    try:
-        p2pkh_script, script_hash = script_hash_from_address(address)
-
-        # Get the UTXOs for the given address
-        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
-
-        # Get current blockchain height
-        best_block = call_method_node("getblockcount", [])
-        # Adjust the format of UTXOs to match what rest.bitcoin.com expects
-        utxos_formatted = [
-            format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
-            for x in utxos
-        ]
-        utxos_formatted.reverse()
-        return utxos_formatted, 200
-    except Exception as e:
-        return e, 500
 
 @app.get("/api/addr/{address}/utxo")
 async def address_utxos(address, response: Response):

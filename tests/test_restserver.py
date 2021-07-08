@@ -218,7 +218,7 @@ class Tests:
         assert response.status_code == 200
 
     @mock.patch("opensight_restserver.get_block_details")
-    def test_block_details_boogaloo(self, mock1):
+    def test_block_details(self, mock1):
         mock1.side_effect = [
             (block_hash_result, 200)
         ]
@@ -229,3 +229,16 @@ class Tests:
         response = client.get(url)
         assert response.json() == block_hash_result
         assert response.status_code == 200
+
+    @mock.patch("opensight_restserver.call_method_node")
+    def test_block_details_retry_exception(self, mock1):
+        mock1.side_effect = [
+            Exception
+        ]
+
+        height = 16
+        url = f"/api/block/{height}"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == {}
+        assert response.status_code == 500
