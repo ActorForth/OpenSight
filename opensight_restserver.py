@@ -303,6 +303,9 @@ async def get_address_details(address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
         txs = get_txs_for_address(address)
+        if type(txs[0]) is Exception or type(txs[1]) is Exception:
+            raise
+
         if txs[1] != 200:
             return txs[0], txs[1]
 
