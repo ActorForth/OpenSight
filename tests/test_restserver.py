@@ -129,7 +129,6 @@ class Tests:
         url = f"/api/tx/{transaction}"
         client = TestClient(app)
         response = client.get(url)
-        print(response.json())
         assert response.json() == transaction_tx_2
 
 
@@ -143,7 +142,6 @@ class Tests:
         url = f"/api/block/{blockhash}"
         client = TestClient(app)
         response = client.get(url)
-        print(response.json())
         assert response.json() == block_hash_result
 
     def test_log_if(self):
@@ -217,19 +215,6 @@ class Tests:
         assert response.json() == address_tx
         assert response.status_code == 200
 
-    @mock.patch("opensight_restserver.get_block_details")
-    def test_block_details(self, mock1):
-        mock1.side_effect = [
-            (block_hash_result, 200)
-        ]
-
-        height = 16
-        url = f"/api/block/{height}"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == block_hash_result
-        assert response.status_code == 200
-
     @mock.patch("opensight_restserver.call_method_node")
     def test_block_details_retry_exception(self, mock1):
         mock1.side_effect = [
@@ -242,3 +227,4 @@ class Tests:
         response = client.get(url)
         assert response.json() == {}
         assert response.status_code == 500
+

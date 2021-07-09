@@ -270,7 +270,6 @@ async def get_block_details(blockhash):
         return block, status
     except Exception as e:
         raise Exception("get_block_error")
-        return e, 500
 
 @retry(Exception, logger=logger)
 async def get_address_utxos(address):
