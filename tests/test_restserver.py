@@ -112,6 +112,31 @@ class Tests:
         assert response.json() == {}
         assert response.status_code == 500
 
+    @mock.patch("opensight_restserver.call_method_electrum")
+    @mock.patch("opensight_restserver.get_txs_for_address")
+    def test_get_address_details_exception_skip_for_if(self, mock1, mock2):
+        mock1.side_effect = [
+            (
+                {
+                    "txs": [
+                        {"txid": "best_txid", "confirmations": 5},
+                        {"txid": "worst_txid", "confirmations": 4},
+                        {"txid": "normal_txid", "confirmations": 3},
+                        ]
+                },
+                200
+            )
+        ]
+        mock2.side_effect = [
+            tx_history_balance 
+        ]
+
+        client = TestClient(app)
+        address = ADDRESS_ENDPOINT_TEST_ADDRESS
+        url = f"/api/addr/{address}"
+        response = client.get(url)
+        assert response.json() == {}
+        assert response.status_code == 500
 
     @mock.patch("opensight_restserver.call_method_node")
     @mock.patch("opensight_restserver.call_method_electrum")

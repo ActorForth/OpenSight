@@ -317,9 +317,6 @@ async def get_address_details(address):
         address_details = {}
         total_balance = balance["confirmed"] + balance["unconfirmed"]
 
-        print("beat here ]]]]]]]]]]]]")
-        print(f"balance:\n{balance}")
-        print(f"txs:\n{txs}")
         address_details["addrStr"] = address
         address_details["balanceSat"] = total_balance
         address_details["unconfirmedBalanceSat"] = balance["unconfirmed"]
@@ -329,12 +326,9 @@ async def get_address_details(address):
 
         address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
         address_details["txApperances"] = len(address_details["transactions"])
-        print(address_details)
-        print("before FOR")
         total_received = 0
         txs_unconfirmed_qty = 0
         for tx in txs["txs"]:
-            print("inside FOR")
             if tx.get("confirmations", 0) <= 0:
                 txs_unconfirmed_qty += 1
             for vout in tx["vout"]:
