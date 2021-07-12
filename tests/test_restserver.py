@@ -138,6 +138,21 @@ class Tests:
         assert response.json() == {}
         assert response.status_code == 500
 
+    @mock.patch("opensight_restserver.call_method_electrum")
+    def test_get_utxo_for_address_exception(self, mock1):
+        mock1.side_effect = [
+            Exception("beat_error")
+        ]
+        
+        client = TestClient(app)
+        address = ADDRESS_ENDPOINT_TEST_ADDRESS
+        url = f"/api/addr/{address}/utxo"
+
+        response = client.get(url)
+
+        assert response.json() == {}
+        assert response.status_code == 500
+
     @mock.patch("opensight_restserver.call_method_node")
     @mock.patch("opensight_restserver.call_method_electrum")
     def test_get_utxo_for_address(self, mock1, mock2):
