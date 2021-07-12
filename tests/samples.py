@@ -560,6 +560,33 @@ block_hash_electrum_result = {
     ],
 }
 
+block_hash_electrum_result_value_satoshi = {
+    "blockhash": "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf",
+    "blocktime": 1615793957,
+    "confirmations": 0,
+    "hash": "10ab83efc33090427dd854d26027abd12e494e4815cf59ead96520e029d40c3b",
+    "height": 229,
+    "hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff1002e500510b2f454233322f414431322fffffffff013cfa052a01000000232103f469f84fb57096dbb5bf63b20c8c39503d584dad915a1fe35971cceb42759486ac00000000",
+    "locktime": 0,
+    "size": 111,
+    "time": 1615793957,
+    "txid": "10ab83efc33090427dd854d26027abd12e494e4815cf59ead96520e029d40c3b",
+    "vin": [
+        {
+            "scriptSig": "02e500510b2f454233322f414431322f",
+            "sequence": 4294967295,
+            "txid": "0000000000000000000000000000000000000000000000000000000000000000",
+            "vout": 4294967295,
+        }
+    ],
+    "vout": [
+        {
+            "scriptPubKey": "2103f469f84fb57096dbb5bf63b20c8c39503d584dad915a1fe35971cceb42759486ac",
+            "value_satoshi": 5000002108,
+        }
+    ],
+}
+
 block_hash_result = {
     "hash": "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf",
     "confirmations": 1,

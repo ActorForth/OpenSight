@@ -21,6 +21,7 @@ from samples import (
     transaction_details_with_coinbase,
     block_hash_call_method_node,
     block_hash_electrum_result,
+    block_hash_electrum_result_value_satoshi,
     block_hash_result,
     mocked_post_txid1,
     mocked_post_txid2,
@@ -37,6 +38,7 @@ def mock_electrum_connect(*args, **kwargs):
         "get_utxo_for_address_1": address_utxo,
         "get_utxo_for_address_2": address_tx,
         "get_block_details": block_hash_electrum_result,
+        "get_block_details_value_satoshi": block_hash_electrum_result_value_satoshi,
     }
     return case.get(kwargs.get("key"), "invalid")
 
@@ -235,6 +237,18 @@ class Tests:
     def test_get_block_details(self, mock1, mock2):
         mock1.side_effect = [mock_call_node(key="get_block_details")]
         mock2.side_effect = [mock_electrum_connect(key="get_block_details")]
+        blockhash = get_block_details_blockhash
+
+        url = f"/api/block/{blockhash}"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == block_hash_result
+
+    @mock.patch("opensight_restserver.call_method_electrum")
+    @mock.patch("opensight_restserver.call_method_node")
+    def test_get_block_details_value_satoshi(self, mock1, mock2):
+        mock1.side_effect = [mock_call_node(key="get_block_details")]
+        mock2.side_effect = [mock_electrum_connect(key="get_block_details_value_satoshi")]
         blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
