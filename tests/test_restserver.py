@@ -173,6 +173,18 @@ class Tests:
         assert response.json() == address_result
 
     @mock.patch("opensight_restserver.call_method_node")
+    def test_transaction_details_exception(self, mock1):
+        mock1.side_effect = [
+            Exception
+        ]
+        transaction = get_transaction_details_tx
+        url = f"/api/tx/{transaction}"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == {}
+        assert response.status_code == 500
+
+    @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details(self, mock1):
         mock1.side_effect = [
             mock_call_node(key="transaction_details_1"),
