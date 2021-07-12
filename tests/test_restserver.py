@@ -198,6 +198,18 @@ class Tests:
         response = client.get(url)
         assert response.json() == block_hash_result
 
+    @mock.patch("opensight_restserver.call_method_node")
+    def test_get_block_details_no_block_found(self, mock1):
+        mock1.side_effect = [""]
+        blockhash = get_block_details_blockhash
+
+        url = f"/api/block/{blockhash}"
+        client = TestClient(app)
+        response = client.get(url)
+
+        assert response.json() == {'message': 'block id not found'}
+        assert response.status_code == 404
+
     def test_log_if(self):
         log("beat_test_log_lol_>////<")
 
