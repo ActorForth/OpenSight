@@ -17,13 +17,14 @@ from samples import (
     transaction_call_method_1,
     transaction_call_method_tx,
     transaction_call_method_2,
+    transaction_details_with_blockhash,
     block_hash_call_method_node,
     block_hash_electrum_result,
     block_hash_result,
     mocked_post_txid1,
     mocked_post_txid2,
     get_block_details_blockhash,
-    get_transaction_details_tx
+    get_transaction_details_tx,
 )
 
 ADDRESS_ENDPOINT_TEST_ADDRESS = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
@@ -45,6 +46,7 @@ def mock_call_node(*args, **kwargs):
         "transaction_details_1": transaction_call_method_1,
         "transaction_details_2": transaction_call_method_tx,
         "transaction_details_3": transaction_call_method_2,
+        "transaction_details_with_blockhash": transaction_details_with_blockhash,
         "get_block_details": block_hash_call_method_node,
         "get_utxo_for_address": 229,  # best block
         "empty": 0
@@ -171,6 +173,20 @@ class Tests:
         response = client.get(url)
 
         assert response.json() == address_result
+
+    @mock.patch("opensight_restserver.call_method_node")
+    def test_transaction_details_if_blockhash(self, mock1):
+        mock1.side_effect = [
+            mock_call_node(key="transaction_details_with_blockhash"),
+            mock_call_node(key="transaction_details_2"),
+            {"height": 16}
+        ]
+        transaction = get_transaction_details_tx
+        url = f"/api/tx/{transaction}"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == transaction_details_with_blockhash
+        assert response.status_code == 200
 
     @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details_exception(self, mock1):
