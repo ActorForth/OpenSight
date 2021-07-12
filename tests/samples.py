@@ -587,6 +587,57 @@ block_hash_electrum_result_value_satoshi = {
     ],
 }
 
+block_hash_electrum_result_without_value = {
+    "blockhash": "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf",
+    "blocktime": 1615793957,
+    "confirmations": 0,
+    "hash": "10ab83efc33090427dd854d26027abd12e494e4815cf59ead96520e029d40c3b",
+    "height": 229,
+    "hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff1002e500510b2f454233322f414431322fffffffff013cfa052a01000000232103f469f84fb57096dbb5bf63b20c8c39503d584dad915a1fe35971cceb42759486ac00000000",
+    "locktime": 0,
+    "size": 111,
+    "time": 1615793957,
+    "txid": "10ab83efc33090427dd854d26027abd12e494e4815cf59ead96520e029d40c3b",
+    "vin": [
+        {
+            "scriptSig": "02e500510b2f454233322f414431322f",
+            "sequence": 4294967295,
+            "txid": "0000000000000000000000000000000000000000000000000000000000000000",
+            "vout": 4294967295,
+        }
+    ],
+    "vout": [
+        {
+            "scriptPubKey": "2103f469f84fb57096dbb5bf63b20c8c39503d584dad915a1fe35971cceb42759486ac",
+        }
+    ],
+}
+
+block_hash_result_no_reward = {
+    "hash": "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf",
+    "confirmations": 1,
+    "size": 1120,
+    "height": 229,
+    "version": 536870912,
+    "versionHex": "20000000",
+    "merkleroot": "021b710f710a005be8f18a1947c3cc77a662eea2e0c444e8d8c4cc717ce925b9",
+    "tx": [
+        "10ab83efc33090427dd854d26027abd12e494e4815cf59ead96520e029d40c3b",
+        "032cb0d26bfefa5c6e270f09b5fea38aa8cad65ec5f350b3e537d3766038d105",
+        "29762bd1581e70d02655f9ada8f71a08a1d6f17f7c0af3fb5009686e3219533e",
+    ],
+    "time": 1615793957,
+    "mediantime": 1615793749,
+    "nonce": 1,
+    "bits": "207fffff",
+    "difficulty": 4.656542373906925e-10,
+    "chainwork": "00000000000000000000000000000000000000000000000000000000000001cc",
+    "previousblockhash": "55ea7e06280023e6e3fe65a8241664112f181b97295ab09a42f2bcef9e19ad46",
+    "isMainChain": True,
+    "poolInfo": {},
+    "reward": 0.0,
+}
+
 block_hash_result = {
     "hash": "0c4339894f7aadb14884c259fbb177b6bea5a063b1c52d537aa7d0bd378827cf",
     "confirmations": 1,

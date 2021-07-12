@@ -22,7 +22,9 @@ from samples import (
     block_hash_call_method_node,
     block_hash_electrum_result,
     block_hash_electrum_result_value_satoshi,
+    block_hash_electrum_result_without_value,
     block_hash_result,
+    block_hash_result_no_reward,
     mocked_post_txid1,
     mocked_post_txid2,
     get_block_details_blockhash,
@@ -243,6 +245,18 @@ class Tests:
         client = TestClient(app)
         response = client.get(url)
         assert response.json() == block_hash_result
+
+    @mock.patch("opensight_restserver.call_method_electrum")
+    @mock.patch("opensight_restserver.call_method_node")
+    def test_get_block_details_without_value(self, mock1, mock2):
+        mock1.side_effect = [mock_call_node(key="get_block_details")]
+        mock2.side_effect = [block_hash_electrum_result_without_value]
+        blockhash = get_block_details_blockhash
+
+        url = f"/api/block/{blockhash}"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == block_hash_result_no_reward
 
     @mock.patch("opensight_restserver.call_method_electrum")
     @mock.patch("opensight_restserver.call_method_node")
