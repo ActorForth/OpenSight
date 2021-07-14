@@ -4,22 +4,20 @@ import json
 import socket
 import time
 import os
-import sys
 import logging
-import random
 import requests
+import sys
 
 from functools import wraps
 from cashaddress import convert
-from flask import Flask
-from flask_restful import Api, Resource, reqparse
 from decimal import Decimal, getcontext
+
+from fastapi import FastAPI, Response
 
 getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-api = Api(app)
+app = FastAPI()
 
 ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
 ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT", 50001))
@@ -55,14 +53,15 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
     """
     def retry_decorator(f):
         @wraps(f)
-        def func_with_retries(*args, **kwargs):
+        async def func_with_retries(*args, **kwargs):
             _tries, _delay = total_tries + 1, initial_wait
             while _tries > 1:
                 try:
+                    _tries -= 1
                     log(f'{total_tries + 2 - _tries}. try:', logger)
-                    result, status = f(*args, **kwargs)
+                    result, status = await f(*args, **kwargs)
                     if status in [200, 400, 404, 409]:
-                        return result
+                        return result, status
                     continue
                 except exceptions as e:
                     _tries -= 1
@@ -72,13 +71,14 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                                   f'Failed despite best efforts after {total_tries} tries.\n'
                                   f'args: {print_args}, kwargs: {kwargs}')
                         log(msg, logger)
-                        raise
+                        return e, 500
                     msg = str(f'Function: {f.__name__}\n'
                               f'Exception: {e}\n'
                               f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
                     log(msg, logger)
                     time.sleep(_delay)
                     _delay *= backoff_factor
+            return result, status
 
         return func_with_retries
     return retry_decorator
@@ -132,7 +132,7 @@ def call_method_node(method, params):
     return dict(response)["result"]
 
 
-def call_method_electrum(method, params=None, id=0):
+def call_method_electrum(method, params=None, id=0): # pragma: no cover
     # previously had _id as a parameter. changed in code to id
     verb = False # verbose?
     with socket.create_connection((ELECTRUM_HOST, ELECTRUM_PORT), timeout=10.0) as sock:
@@ -202,67 +202,118 @@ def get_block_reward(block):
     tx = call_method_electrum("blockchain.transaction.get", [coinbase_tx, True])
 
     for vout in tx["vout"]:
-        amount += vout["value"]
+        if "value" in vout:
+            amount += vout["value"]
+        elif "value_satoshi" in vout:
+            amount += vout["value_satoshi"]
 
     return amount / 100000000.0
 
 
 def get_tx_details(tx_hash):
-    tx = call_method_node("getrawtransaction", [tx_hash, True])
-    if not tx:
-        return "Not found", 404
-    tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
-    tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
+    try:
+        tx = call_method_node("getrawtransaction", [tx_hash, True])
+        if not tx:
+            return "Not found", 404
+        tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
+        tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
 
-    tx.pop("hex", None)
+        tx.pop("hex", None)
 
-    if "coinbase" in tx["vin"][0]:
-        tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
-        tx["valueOut"] = float(tx["valueOut"])
-    else:
-        tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
-        tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
-        tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
+        if "coinbase" in tx["vin"][0]:
+            tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+            tx["valueOut"] = float(tx["valueOut"])
+        else:
+            tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
+            tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
+            tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
 
-        tx["valueIn"] = float(tx["valueIn"])
-        tx["valueOut"] = float(tx["valueOut"])
-        tx["fees"] = float(tx["fees"])
+            tx["valueIn"] = float(tx["valueIn"])
+            tx["valueOut"] = float(tx["valueOut"])
+            tx["fees"] = float(tx["fees"])
 
-    if "blockhash" in tx:
-        tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
-    return tx
+        if "blockhash" in tx:
+            tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
+        return tx, 200
+    except Exception as e:
+        return e, 500
 
 
 def get_txs_for_address(address):
-    p2pkh_script, script_hash = script_hash_from_address(address)
+    try:
+        p2pkh_script, script_hash = script_hash_from_address(address)
 
-    tx_history = call_method_electrum(
-        "blockchain.scripthash.get_history", [script_hash]
-    )
-    txs = {}
-    txs["txs"] = [get_tx_details(tx["tx_hash"]) for tx in tx_history]
-    txs["pagesTotal"] = 0
-    txs["currentPage"] = 0
-    return txs
+        tx_history = call_method_electrum(
+            "blockchain.scripthash.get_history", [script_hash]
+        )
+        txs = {}
+        txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
+        txs["pagesTotal"] = 0
+        txs["currentPage"] = 0
+        return txs, 200
+    except Exception as e:
+        return e, 500
+
+@retry(Exception, logger=logger)
+async def get_block_details(blockhash):
+    try:
+        block = call_method_node("getblock", [blockhash, True])
+        if not block:
+            status = 404 
+            return {"message": "block id not found"}, status
+        # To investigate
+        block["isMainChain"] = True
+        block["poolInfo"] = {}
+
+        block["reward"] = get_block_reward(block)
+        status = 200
+        return block, status
+    except Exception as e:
+        raise Exception("get_block_error")
+
+@retry(Exception, logger=logger)
+async def get_address_utxos(address):
+    try:
+        p2pkh_script, script_hash = script_hash_from_address(address)
+
+        # Get the UTXOs for the given address
+        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
+
+        # Get current blockchain height
+        best_block = call_method_node("getblockcount", [])
+        # Adjust the format of UTXOs to match what rest.bitcoin.com expects
+        utxos_formatted = [
+            format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
+            for x in utxos
+        ]
+        utxos_formatted.reverse()
+        return utxos_formatted, 200
+    except Exception as e:
+        return e, 500
+
+@app.get("/")
+async def entry_point(response: Response):
+        response.status_code = 200
+        return {"platform": "opensight", "version": VERSION}
 
 
-class EntryPoint(Resource):
-    @retry(Exception, logger=logger)
-    def get(self):
-        return {"platform": "opensight", "version": VERSION}, 200
-
-
-class AddressDetail(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, address):
+@retry(Exception, logger=logger)
+async def get_address_details(address):
+    try:
         p2pkh_script, script_hash = script_hash_from_address(address)
 
         txs = get_txs_for_address(address)
+        if type(txs[0]) is Exception or type(txs[1]) is Exception:
+            raise
+
+        if txs[1] != 200:
+            return txs[0], txs[1]
+
+        txs = txs[0] #txs is tuple with status_code
 
         balance = call_method_electrum(
             "blockchain.scripthash.get_balance", [script_hash]
         )
-
         address_details = {}
         total_balance = balance["confirmed"] + balance["unconfirmed"]
 
@@ -275,7 +326,6 @@ class AddressDetail(Resource):
 
         address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
         address_details["txApperances"] = len(address_details["transactions"])
-
         total_received = 0
         txs_unconfirmed_qty = 0
         for tx in txs["txs"]:
@@ -293,68 +343,40 @@ class AddressDetail(Resource):
         address_details["totalSent"] = float(total_sent)
         address_details["totalSentSat"] = int(total_sent * 100000000)
         return address_details, 200
+    except Exception as e:
+        return e, 500
+
+@app.get("/api/addr/{address}")
+async def address_details(address, response: Response):
+    result, status = await get_address_details(address)
+    response.status_code = status
+    return result
+
+@app.get("/api/tx/{transaction}")
+async def transaction_detail(transaction, response: Response):
+    result, status = get_tx_details(transaction)
+    response.status_code = status
+    return result
 
 
-class TransactionDetail(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, transaction):
-        return get_tx_details(transaction), 200
+@app.get("/api/txs/")
+async def transactions(response: Response, address=None, pageNum=None):
+    if address==None:
+        response.status_code = 400
+        return "address cannot be empty"
+    result, status = get_txs_for_address(address)
+    response.status_code = status
+    return result
 
 
-class Transactions(Resource):  # pragma: no cover
-    @retry(Exception, logger=logger)
-    def get(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument("address", type=str)
-        parser.add_argument("pageNum", type=str)
+@app.get("/api/addr/{address}/utxo")
+async def address_utxos(address, response: Response):
+    result, status = await get_address_utxos(address)
+    response.status_code = status
+    return result
 
-        args = parser.parse_args()
-
-        return get_txs_for_address(args["address"]), 200
-
-
-class AddressUtxos(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, address):
-        p2pkh_script, script_hash = script_hash_from_address(address)
-
-        # Get the UTXOs for the given address
-        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
-
-        # Get current blockchain height
-        best_block = call_method_node("getblockcount", [])
-        # Adjust the format of UTXOs to match what rest.bitcoin.com expects
-        utxos_formatted = [
-            format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
-            for x in utxos
-        ]
-        utxos_formatted.reverse()
-
-        return utxos_formatted, 200
-
-
-class BlockDetails(Resource):
-    @retry(Exception, logger=logger)
-    def get(self, blockhash):
-
-        block = call_method_node("getblock", [blockhash, True])
-        if not block:
-            return "block id not found", 404
-        # To investigate
-        block["isMainChain"] = True
-        block["poolInfo"] = {}
-
-        block["reward"] = get_block_reward(block)
-        return block, 200
-
-
-api.add_resource(EntryPoint, "/")
-api.add_resource(AddressDetail, "/api/addr/<address>")
-api.add_resource(AddressUtxos, "/api/addr/<address>/utxo")
-api.add_resource(BlockDetails, "/api/block/<blockhash>")
-api.add_resource(TransactionDetail, "/api/tx/<transaction>")
-api.add_resource(Transactions, "/api/txs/")
-
-
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=OPENSIGHT_PORT)
+@app.get("/api/block/{blockhash}")
+async def block_details(blockhash, response: Response):
+    result, status = await get_block_details(blockhash)
+    response.status_code = status
+    return result

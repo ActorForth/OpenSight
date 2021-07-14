@@ -6,6 +6,7 @@ source =
 branch = True
 omit = 
     venv/*
+    .venv/*
 
 [report]
 exclude_lines =
