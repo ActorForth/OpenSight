@@ -316,8 +316,6 @@ class Tests:
         address = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
         p2pkh_script = "76a914596cd4508cd763b019bd4b83e1b4ca0fa58281a688ac"
         response = format_utxo_from_electrum(utxo, best_block, address, p2pkh_script)
-        print("====AFTER====")
-        print(response)
         assert response == utxo_from_electrum
 
     def test_transactions_not_found(self):
