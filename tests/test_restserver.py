@@ -29,6 +29,7 @@ from samples import (
     mocked_post_txid2,
     get_block_details_blockhash,
     get_transaction_details_tx,
+    utxo_from_electrum,
 )
 
 ADDRESS_ENDPOINT_TEST_ADDRESS = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
@@ -298,25 +299,6 @@ class Tests:
         assert result == "Not found"
         assert status == 404
 
-    @mock.patch("opensight_restserver.call_method_node")
-    def test_format_tx_vin(self, mock1):
-        mock1.side_effect = [
-            mock_call_node(key="transaction_details_2")
-        ]
-        vin = {
-            "coinbase": " ",
-            "txid": " ",
-            "valueSat": " ",
-            "vout": 0,
-            "value": " ",
-            "cashAddress": " ",
-            "scriptPubKey": " ",
-            "addresses": " ",
-            "doubleSpentTxID": " "
-        }
-        n = " "
-        format_tx_vin(vin, n)
-
     @mock.patch("opensight_restserver.call_method_electrum")
     def test_format_utxo_from_electrum(self,mock1):
         mock1.side_effect = [
@@ -324,15 +306,19 @@ class Tests:
         ]
         utxo = {
             "height": 2,
-            "tx_hash": " ",
-            "tx_pos": " ",
+            "tx_hash": "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce",
+            "tx_pos": "0",
             "value": 1000000000,
             "value": 100000000,
         }
+
         best_block = 10
-        address = " "
-        p2pkh_script = " "
-        format_utxo_from_electrum(utxo, best_block, address, p2pkh_script)
+        address = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
+        p2pkh_script = "76a914596cd4508cd763b019bd4b83e1b4ca0fa58281a688ac"
+        response = format_utxo_from_electrum(utxo, best_block, address, p2pkh_script)
+        print("====AFTER====")
+        print(response)
+        assert response == utxo_from_electrum
 
     def test_transactions_not_found(self):
         url = "/api/txs/"

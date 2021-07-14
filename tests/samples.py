@@ -143,6 +143,17 @@ address_utxo = [
     }
 ]
 
+utxo_from_electrum = {
+   "height":2,
+   "txid":"13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce",
+   "vout":"0",
+   "satoshis":100000000,
+   "amount":1.0,
+   "address":"mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx",
+   "scriptPubKey":"76a914596cd4508cd763b019bd4b83e1b4ca0fa58281a688ac",
+   "confirmations":9
+   }
+
 address_tx = {
     "blockhash": "0000000000000000000000000000000000000000000000000000000000000000",
     "blocktime": 0,
