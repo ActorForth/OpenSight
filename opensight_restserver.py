@@ -62,7 +62,7 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                 try:
                     log(f'{total_tries + 1 - _tries}. try:', logger)
                     result, status = f(*args, **kwargs)
-                    log(f'status: {status}')
+                    log(f'status: {status}', logger)
                     if status in [200, 400, 404, 409]:
                         return result
                 except exceptions as e:
