@@ -1,17 +1,16 @@
 # app.py - a minimal flask api using flask_restful
 import hashlib
 import json
-import socket
-import time
-import os
 import logging
-import requests
+import os
+import socket
 import sys
-
-from functools import wraps
-from cashaddress import convert
+import time
 from decimal import Decimal, getcontext
+from functools import wraps
 
+import requests
+from cashaddress import convert
 from fastapi import FastAPI, Response
 
 getcontext().prec = 8 # Decimal precision
@@ -56,29 +55,30 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
         async def func_with_retries(*args, **kwargs):
             _tries, _delay = total_tries + 1, initial_wait
             while _tries > 1:
+                _tries -= 1
                 try:
-                    _tries -= 1
-                    log(f'{total_tries + 2 - _tries}. try:', logger)
-                    result, status = await f(*args, **kwargs)
+                    log(f'{total_tries + 1 - _tries}. try:', logger)
+                    result, status = f(*args, **kwargs)
+                    log(f'status: {status}', logger)
                     if status in [200, 400, 404, 409]:
-                        return result, status
-                    continue
+                        return result
                 except exceptions as e:
-                    _tries -= 1
+
                     print_args = args if args else 'no args'
                     if _tries == 1:
                         msg = str(f'Function: {f.__name__}\n'
                                   f'Failed despite best efforts after {total_tries} tries.\n'
                                   f'args: {print_args}, kwargs: {kwargs}')
                         log(msg, logger)
-                        return e, 500
-                    msg = str(f'Function: {f.__name__}\n'
-                              f'Exception: {e}\n'
-                              f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
-                    log(msg, logger)
-                    time.sleep(_delay)
-                    _delay *= backoff_factor
-            return result, status
+                        raise
+                    
+                print_args = args if args else 'no args'
+                msg = str(f'Function: {f.__name__}\n'
+                            f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
+                log(msg, logger)
+    
+                time.sleep(_delay)
+                _delay *= backoff_factor
 
         return func_with_retries
     return retry_decorator
