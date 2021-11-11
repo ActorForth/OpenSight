@@ -24,7 +24,7 @@ jobs:
           docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$TAG_OPENSIGHT -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ./
 
       - name: Docker Login
-        uses: docker/login-action@v1.10
+        uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
