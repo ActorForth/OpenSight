@@ -58,14 +58,15 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
         def func_with_retries(*args, **kwargs):
             _tries, _delay = total_tries + 1, initial_wait
             while _tries > 1:
+                _tries -= 1
                 try:
-                    log(f'{total_tries + 2 - _tries}. try:', logger)
+                    log(f'{total_tries + 1 - _tries}. try:', logger)
                     result, status = f(*args, **kwargs)
+                    log(f'status: {status}', logger)
                     if status in [200, 400, 404, 409]:
                         return result
-                    continue
                 except exceptions as e:
-                    _tries -= 1
+
                     print_args = args if args else 'no args'
                     if _tries == 1:
                         msg = str(f'Function: {f.__name__}\n'
@@ -73,12 +74,14 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                                   f'args: {print_args}, kwargs: {kwargs}')
                         log(msg, logger)
                         raise
-                    msg = str(f'Function: {f.__name__}\n'
-                              f'Exception: {e}\n'
-                              f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
-                    log(msg, logger)
-                    time.sleep(_delay)
-                    _delay *= backoff_factor
+                    
+                print_args = args if args else 'no args'
+                msg = str(f'Function: {f.__name__}\n'
+                            f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
+                log(msg, logger)
+    
+                time.sleep(_delay)
+                _delay *= backoff_factor
 
         return func_with_retries
     return retry_decorator
