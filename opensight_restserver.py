@@ -218,7 +218,7 @@ def get_tx_details(tx_hash, session=None):
     if session is None:
         session = requests.Session()
     try:
-        tx = call_method_node("getrawtransaction", [tx_hash, True])
+        tx = call_method_node("getrawtransaction", [tx_hash, True], session=session)
         if not tx:
             return "Not found", 404
         tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
