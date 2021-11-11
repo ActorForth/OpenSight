@@ -16,6 +16,7 @@ from fastapi import FastAPI, Response
 getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
 
+session = requests.Session()
 app = FastAPI()
 
 ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
@@ -120,9 +121,7 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
-def call_method_node(method, params, session=None):
-    if session is None:
-        session = requests.Session()
+def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "text/plain; "}
     response = session.post(
@@ -214,11 +213,9 @@ def get_block_reward(block):
     return amount / 100000000.0
 
 
-def get_tx_details(tx_hash, session=None):
-    if session is None:
-        session = requests.Session()
+def get_tx_details(tx_hash):
     try:
-        tx = call_method_node("getrawtransaction", [tx_hash, True], session=session)
+        tx = call_method_node("getrawtransaction", [tx_hash, True])
         if not tx:
             return "Not found", 404
         tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
@@ -253,8 +250,7 @@ def get_txs_for_address(address):
             "blockchain.scripthash.get_history", [script_hash]
         )
         txs = {}
-        tx_request_session = requests.Session()
-        txs["txs"] = [get_tx_details(tx["tx_hash"], session=tx_request_session)[0] for tx in tx_history]
+        txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
         txs["pagesTotal"] = 0
         txs["currentPage"] = 0
         return txs, 200
