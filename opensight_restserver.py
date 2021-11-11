@@ -118,10 +118,12 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
-def call_method_node(method, params):
+def call_method_node(method, params, session=None):
+    if session is None:
+        session = requests.Session()
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "text/plain; "}
-    response = requests.post(
+    response = session.post(
         "http://{}:{}@{}:{}".format(
             NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
         ),
@@ -210,7 +212,9 @@ def get_block_reward(block):
     return amount / 100000000.0
 
 
-def get_tx_details(tx_hash):
+def get_tx_details(tx_hash, session=None):
+    if session is None:
+        session = requests.Session()
     try:
         tx = call_method_node("getrawtransaction", [tx_hash, True])
         if not tx:
@@ -247,7 +251,8 @@ def get_txs_for_address(address):
             "blockchain.scripthash.get_history", [script_hash]
         )
         txs = {}
-        txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
+        tx_request_session = requests.Session()
+        txs["txs"] = [get_tx_details(tx["tx_hash"], session=tx_request_session)[0] for tx in tx_history]
         txs["pagesTotal"] = 0
         txs["currentPage"] = 0
         return txs, 200
