@@ -296,6 +296,7 @@ async def get_address_utxos(address):
         utxos_formatted.reverse()
         return utxos_formatted, 200
     except Exception as e:
+        log(f'exception: {e}', logger)
         return e, 500
 
 @app.get("/")
