@@ -61,7 +61,7 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                     result, status = await f(*args, **kwargs)
                     log(f'status: {status}', logger)
                     if status in [200, 400, 404, 409]:
-                        return result
+                        return result, status
                 except exceptions as e:
 
                     print_args = args if args else 'no args'
@@ -79,6 +79,8 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
     
                 time.sleep(_delay)
                 _delay *= backoff_factor
+
+            return None, 500
 
         return func_with_retries
     return retry_decorator
