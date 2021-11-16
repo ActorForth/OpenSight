@@ -1,8 +1,8 @@
-from unittest import mock
 import json
-from fastapi.testclient import TestClient
 import logging
+import pytest
 
+from fastapi.testclient import TestClient
 from opensight_restserver import app, format_tx_vin, format_utxo_from_electrum, get_tx_details, log
 from samples import (
     tx_history_1,
@@ -31,6 +31,8 @@ from samples import (
     get_transaction_details_tx,
     utxo_from_electrum,
 )
+from unittest import mock
+
 
 ADDRESS_ENDPOINT_TEST_ADDRESS = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
 
@@ -72,6 +74,7 @@ def mocked_post(*args, **kwargs):
 
     data = kwargs.get("data")
     json_data = json.loads(data)
+    print(f"IMIN THE MOCK\n\n {json_data}")
 
     if (
         json_data["params"][0]
@@ -94,7 +97,7 @@ class Tests:
         response = client.get(url)
         assert response.json() == {'platform': 'opensight', 'version': 'v1.0.4'}
 
-    @mock.patch("opensight_restserver.requests.post", side_effect=mocked_post)
+    @mock.patch("opensight_restserver.requests.Session.post", side_effect=mocked_post)
     @mock.patch("opensight_restserver.call_method_electrum")
     def test_get_address_details(self, mock1, mock2):
         mock1.side_effect = [
@@ -118,7 +121,7 @@ class Tests:
         address = ADDRESS_ENDPOINT_TEST_ADDRESS
         url = f"/api/addr/{address}"
         response = client.get(url)
-        assert response.json() == {}
+        assert response.json() == None
         assert response.status_code == 500
 
     @mock.patch("opensight_restserver.call_method_electrum")
@@ -144,7 +147,7 @@ class Tests:
         address = ADDRESS_ENDPOINT_TEST_ADDRESS
         url = f"/api/addr/{address}"
         response = client.get(url)
-        assert response.json() == {}
+        assert response.json() == None
         assert response.status_code == 500
 
     @mock.patch("opensight_restserver.call_method_electrum")
@@ -159,7 +162,7 @@ class Tests:
 
         response = client.get(url)
 
-        assert response.json() == {}
+        assert response.json() == None
         assert response.status_code == 500
 
     @mock.patch("opensight_restserver.call_method_node")
@@ -344,9 +347,10 @@ class Tests:
         ]
 
         height = 16
-        url = f"/api/block/{height}"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == {}
-        assert response.status_code == 500
+        with pytest.raises(Exception):
+            url = f"/api/block/{height}"
+            client = TestClient(app)
+            response = client.get(url)
+            assert response.json() == None
+            assert response.status_code == 500
 

@@ -138,7 +138,7 @@ def call_method_node(method, params):
 def call_method_electrum(method, params=None, id=0): # pragma: no cover
     # previously had _id as a parameter. changed in code to id
     verb = False # verbose?
-    with socket.create_connection((ELECTRUM_HOST, ELECTRUM_PORT), timeout=10.0) as sock:
+    with socket.create_connection((ELECTRUM_HOST, ELECTRUM_PORT), timeout=15.0) as sock:
         def sndrecv(method, params=None):
             outj = { "id" : 0, "jsonrpc" : "2.0", "method" : method, "params": params}
             msg = json.dumps(outj, indent=None).encode("utf8") + b'\n'
@@ -247,7 +247,7 @@ def get_txs_for_address(address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
         tx_history = call_method_electrum(
-            "blockchain.scripthash.get_history", [script_hash]
+            "blockchain.address.get_history", [address]
         )
         txs = {}
         txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
@@ -280,7 +280,7 @@ async def get_address_utxos(address):
         p2pkh_script, script_hash = script_hash_from_address(address)
 
         # Get the UTXOs for the given address
-        utxos = call_method_electrum("blockchain.scripthash.listunspent", [script_hash])
+        utxos = call_method_electrum("blockchain.address.listunspent", [address])
 
         # Get current blockchain height
         best_block = call_method_node("getblockcount", [])
@@ -316,7 +316,7 @@ async def get_address_details(address):
         txs = txs[0] #txs is tuple with status_code
 
         balance = call_method_electrum(
-            "blockchain.scripthash.get_balance", [script_hash]
+            "blockchain.address.get_balance", [address]
         )
         address_details = {}
         total_balance = balance["confirmed"] + balance["unconfirmed"]
