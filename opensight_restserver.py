@@ -1,4 +1,5 @@
 # app.py - a minimal flask api using flask_restful
+from asyncio.tasks import create_task
 import hashlib
 import json
 import logging
@@ -8,6 +9,8 @@ import sys
 import time
 from decimal import Decimal, getcontext
 from functools import wraps
+import asyncio
+import aiohttp
 
 import requests
 from cashaddress import convert
@@ -121,18 +124,19 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
-def call_method_node(method, params):
+async def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "text/plain; "}
-    response = session.post(
-        "http://{}:{}@{}:{}".format(
-            NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
-        ),
-        headers=request_headers,
-        data=json.dumps(payload),
-    ).json()
-
-    return dict(response)["result"]
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "http://{}:{}@{}:{}".format(
+                NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
+            ),
+            headers=request_headers,
+            data=json.dumps(payload),
+        ) as resp:
+            json_response = await resp.json()
+            return json_response
 
 
 def call_method_electrum(method, params=None, id=0): # pragma: no cover
@@ -181,9 +185,10 @@ def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
     return res_utxo
 
 
-def format_tx_vin(vin, n):
+async def format_tx_vin(vin, n):
     if not "coinbase" in vin:
-        tx_vout = call_method_node("getrawtransaction", [vin["txid"], True])
+        tx_vout = await call_method_node("getrawtransaction", [vin["txid"], True])
+        tx_vout = dict(tx_vout["result"])
         vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
         vin["cashAddress"] = tx_vout["vout"][vin["vout"]]["scriptPubKey"]["addresses"][0]
         vin["doubleSpentTxID"] = None
@@ -213,16 +218,26 @@ def get_block_reward(block):
     return amount / 100000000.0
 
 
-def get_tx_details(tx_hash):
+async def get_tx_details(tx_hash):
     try:
-        tx = call_method_node("getrawtransaction", [tx_hash, True])
+        tx = {}
+        tx = await call_method_node("getrawtransaction", [tx_hash, True])
         if not tx:
             return "Not found", 404
-        tx["vin"] = [format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"])]
+
+        tx = dict(tx["result"])
+        
+        vin_tasks = []
+        for n, vin in enumerate(tx["vin"]):
+            vin_tasks.append(asyncio.create_task(format_tx_vin(vin, n)))
+            
+        # tx["vin"] = [asyncio.gather(format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"]))]
+
+        tx["vin"] = await asyncio.gather(*vin_tasks)
+
         tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
-
         tx.pop("hex", None)
-
+        
         if "coinbase" in tx["vin"][0]:
             tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
             tx["valueOut"] = float(tx["valueOut"])
@@ -230,19 +245,21 @@ def get_tx_details(tx_hash):
             tx["valueIn"] = sum([Decimal(str(vin["valueSat"])) for vin in tx["vin"]])
             tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
             tx["fees"] = Decimal(tx["valueIn"]) - Decimal(tx["valueOut"])
-
             tx["valueIn"] = float(tx["valueIn"])
             tx["valueOut"] = float(tx["valueOut"])
             tx["fees"] = float(tx["fees"])
 
         if "blockhash" in tx:
-            tx["blockheight"] = call_method_node("getblock", [tx["blockhash"]])["height"]
+            height_details = await call_method_node("getblock", [tx["blockhash"]])
+
+            tx["blockheight"] = dict(height_details["result"])["height"]
+
         return tx, 200
     except Exception as e:
         return e, 500
 
 
-def get_txs_for_address(address):
+async def get_txs_for_address(address):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -250,7 +267,15 @@ def get_txs_for_address(address):
             "blockchain.address.get_history", [address]
         )
         txs = {}
-        txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
+        tasks = []
+        for tx in tx_history:
+            tasks.append(asyncio.create_task(get_tx_details(tx["tx_hash"])))
+        
+        # tasks = [await asyncio.create_task(get_tx_details(tx["tx_hash"]) for tx in tx_history)]
+        results = await asyncio.gather(*tasks)
+        
+        txs["txs"] = results
+        # txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
         txs["pagesTotal"] = 0
         txs["currentPage"] = 0
         return txs, 200
@@ -260,10 +285,12 @@ def get_txs_for_address(address):
 @retry(Exception, logger=logger)
 async def get_block_details(blockhash):
     try:
-        block = call_method_node("getblock", [blockhash, True])
+        block = await call_method_node("getblock", [blockhash, True])
         if not block:
             status = 404 
             return {"message": "block id not found"}, status
+        block = dict(block["result"])
+        
         # To investigate
         block["isMainChain"] = True
         block["poolInfo"] = {}
@@ -272,7 +299,8 @@ async def get_block_details(blockhash):
         status = 200
         return block, status
     except Exception as e:
-        raise Exception("get_block_error")
+        log(f'exception: {e}', logger)
+        return e, 500
 
 @retry(Exception, logger=logger)
 async def get_address_utxos(address):
@@ -283,7 +311,7 @@ async def get_address_utxos(address):
         utxos = call_method_electrum("blockchain.address.listunspent", [address])
 
         # Get current blockchain height
-        best_block = call_method_node("getblockcount", [])
+        best_block = await call_method_node("getblockcount", [])
         # Adjust the format of UTXOs to match what rest.bitcoin.com expects
         utxos_formatted = [
             format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
@@ -305,8 +333,7 @@ async def entry_point(response: Response):
 async def get_address_details(address):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
-
-        txs = get_txs_for_address(address)
+        txs = await get_txs_for_address(address)
         if type(txs[0]) is Exception or type(txs[1]) is Exception:
             raise
 
@@ -328,14 +355,16 @@ async def get_address_details(address):
         address_details["balance"] = total_balance / 100000000.0
         address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
 
-        address_details["transactions"] = [tx["txid"] for tx in txs["txs"]]
+        address_details["transactions"] = [tx[0]["txid"] for tx in txs["txs"]]
+
         address_details["txApperances"] = len(address_details["transactions"])
         total_received = 0
         txs_unconfirmed_qty = 0
         for tx in txs["txs"]:
-            if tx.get("confirmations", 0) <= 0:
+
+            if tx[0].get("confirmations", 0) <= 0:
                 txs_unconfirmed_qty += 1
-            for vout in tx["vout"]:
+            for vout in tx[0]["vout"]:
                 if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
                     total_received = Decimal(total_received) + Decimal(str(vout["value"]))
 
@@ -348,6 +377,7 @@ async def get_address_details(address):
         address_details["totalSentSat"] = int(total_sent * 100000000)
         return address_details, 200
     except Exception as e:
+        log(f'exception: {e}', logger)
         return e, 500
 
 @app.get("/api/addr/{address}")
@@ -358,7 +388,7 @@ async def address_details(address, response: Response):
 
 @app.get("/api/tx/{transaction}")
 async def transaction_detail(transaction, response: Response):
-    result, status = get_tx_details(transaction)
+    result, status = await get_tx_details(transaction)
     response.status_code = status
     return result
 
@@ -368,7 +398,7 @@ async def transactions(response: Response, address=None, pageNum=None):
     if address==None:
         response.status_code = 400
         return "address cannot be empty"
-    result, status = get_txs_for_address(address)
+    result, status = await get_txs_for_address(address)
     response.status_code = status
     return result
 
