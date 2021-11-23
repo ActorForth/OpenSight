@@ -1,6 +1,8 @@
+import asyncio
 import json
 import logging
 import pytest
+import nest_asyncio
 
 from fastapi.testclient import TestClient
 from opensight_restserver import app, format_tx_vin, format_utxo_from_electrum, get_tx_details, log
@@ -18,7 +20,9 @@ from samples import (
     transaction_call_method_tx,
     transaction_call_method_2,
     transaction_details_with_blockhash,
+    transaction_details_with_blockhash_response,
     transaction_details_with_coinbase,
+    transaction_details_with_coinbase_response,
     block_hash_call_method_node,
     block_hash_electrum_result,
     block_hash_electrum_result_value_satoshi,
@@ -33,6 +37,8 @@ from samples import (
 )
 from unittest import mock
 
+
+nest_asyncio.apply()
 
 ADDRESS_ENDPOINT_TEST_ADDRESS = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
 
@@ -62,6 +68,22 @@ def mock_call_node(*args, **kwargs):
     }
     return case.get(kwargs.get("key"), "invalid")
 
+
+class MockResponse:
+    def __init__(self, text, status):
+        self._text = text
+        self.status = status
+
+    async def text(self):
+        return self._text
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+
 def mocked_post(*args, **kwargs):
     # Mocks the post requests to electrum for address balance and txs
     class MockResponse:
@@ -69,13 +91,17 @@ def mocked_post(*args, **kwargs):
             self.json_data = json_data
             self.status_code = status_code
 
-        def json(self):
+        async def json(self):
             return self.json_data
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def __aenter__(self):
+            return self
 
     data = kwargs.get("data")
     json_data = json.loads(data)
-    print(f"IMIN THE MOCK\n\n {json_data}")
-
     if (
         json_data["params"][0]
         == mocked_post_txid1
@@ -97,7 +123,7 @@ class Tests:
         response = client.get(url)
         assert response.json() == {'platform': 'opensight', 'version': 'v1.0.4'}
 
-    @mock.patch("opensight_restserver.requests.Session.post", side_effect=mocked_post)
+    @mock.patch("opensight_restserver.aiohttp.ClientSession.post", side_effect=mocked_post)
     @mock.patch("opensight_restserver.call_method_electrum")
     def test_get_address_details(self, mock1, mock2):
         mock1.side_effect = [
@@ -189,27 +215,30 @@ class Tests:
         mock1.side_effect = [
             mock_call_node(key="transaction_details_with_coinbase"),
             mock_call_node(key="transaction_details_2"),
-            {"height": 16}
+            {"result": {"height": 16}}
         ]
         transaction = get_transaction_details_tx
         url = f"/api/tx/{transaction}"
         client = TestClient(app)
         response = client.get(url)
-        assert response.json() == transaction_details_with_coinbase
+        
+        assert response.json() == transaction_details_with_coinbase_response
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
     @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details_if_blockhash(self, mock1):
         mock1.side_effect = [
             mock_call_node(key="transaction_details_with_blockhash"),
             mock_call_node(key="transaction_details_2"),
-            {"height": 16}
+            {"result": {"height": 16}}
         ]
         transaction = get_transaction_details_tx
         url = f"/api/tx/{transaction}"
         client = TestClient(app)
         response = client.get(url)
-        assert response.json() == transaction_details_with_blockhash
+
+        assert response.json() == transaction_details_with_blockhash_response
         assert response.status_code == 200
 
     @mock.patch("opensight_restserver.call_method_node")
@@ -274,8 +303,9 @@ class Tests:
         response = client.get(url)
         assert response.json() == block_hash_result
 
+    @pytest.mark.asyncio
     @mock.patch("opensight_restserver.call_method_node")
-    def test_get_block_details_no_block_found(self, mock1):
+    async def test_get_block_details_no_block_found(self, mock1):
         mock1.side_effect = [""]
         blockhash = get_block_details_blockhash
 
@@ -293,12 +323,13 @@ class Tests:
         logger = logging.getLogger(__name__)
         log("beat_test_log_lol_>////<", logger)
 
+    @pytest.mark.asyncio
     @mock.patch("opensight_restserver.call_method_node")
-    def test_get_tx_details_404(self, mock1):
+    async def test_get_tx_details_404(self, mock1):
         mock1.side_effect = [
             mock_call_node(key = "empty")
         ]
-        result, status = get_tx_details("thank")
+        result, status = await get_tx_details("thank")
         assert result == "Not found"
         assert status == 404
 
@@ -347,10 +378,10 @@ class Tests:
         ]
 
         height = 16
-        with pytest.raises(Exception):
-            url = f"/api/block/{height}"
-            client = TestClient(app)
-            response = client.get(url)
-            assert response.json() == None
-            assert response.status_code == 500
+        
+        url = f"/api/block/{height}"
+        client = TestClient(app)
+        response = client.get(url)
+        assert response.json() == None
+        assert response.status_code == 500
 
