@@ -312,6 +312,7 @@ async def get_address_utxos(address):
 
         # Get current blockchain height
         best_block = await call_method_node("getblockcount", [])
+        best_block = best_block["result"]
         # Adjust the format of UTXOs to match what rest.bitcoin.com expects
         utxos_formatted = [
             format_utxo_from_electrum(x, best_block, address, p2pkh_script.hex())
