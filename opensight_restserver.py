@@ -19,7 +19,7 @@ from fastapi import FastAPI, Response
 getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
 
-session = requests.Session()
+session = aiohttp.ClientSession()
 app = FastAPI()
 
 ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
@@ -126,17 +126,16 @@ def connect_to_tcp(host, port):  # pragma: no cover
 
 async def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
-    request_headers = {"content-type": "text/plain; "}
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "http://{}:{}@{}:{}".format(
-                NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
-            ),
-            headers=request_headers,
-            data=json.dumps(payload),
-        ) as resp:
-            json_response = await resp.json()
-            return json_response
+    request_headers = {"content-type": "application/json; "}
+    async with session.post(
+                "http://{}:{}@{}:{}".format(
+                    NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
+                ),
+                headers=request_headers,
+                data=json.dumps(payload),
+            ) as resp:
+                json_response = await resp.json()
+                return json_response
 
 
 def call_method_electrum(method, params=None, id=0): # pragma: no cover
