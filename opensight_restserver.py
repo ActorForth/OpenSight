@@ -79,7 +79,6 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                     if status in [200, 400, 404, 409]:
                         return result, status
                 except exceptions as e:
-
                     print_args = args if args else 'no args'
                     if _tries == 1:
                         msg = str(f'Function: {f.__name__}\n'
@@ -147,6 +146,7 @@ def connect_to_tcp(host, port):  # pragma: no cover
 async def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "application/json; "}
+    try:
         async with session.post(
                     "http://{}:{}@{}:{}".format(
                         NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
@@ -191,11 +191,6 @@ def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
     res_utxo["amount"] = utxo["value"] / 100000000.0
     res_utxo["address"] = address
     res_utxo["scriptPubKey"] = p2pkh_script
-
-    # tx = call_method_electrum(
-    #     "blockchain.transaction.get",
-    #     [utxo['tx_hash'], True]
-    # )
 
     if utxo["height"] == 0:
         res_utxo["confirmations"] = 0
@@ -250,8 +245,6 @@ async def get_tx_details(tx_hash):
         vin_tasks = []
         for n, vin in enumerate(tx["vin"]):
             vin_tasks.append(asyncio.create_task(format_tx_vin(vin, n)))
-            
-        # tx["vin"] = [asyncio.gather(format_tx_vin(vin, n) for n, vin in enumerate(tx["vin"]))]
 
         tx["vin"] = await asyncio.gather(*vin_tasks)
 
@@ -271,10 +264,10 @@ async def get_tx_details(tx_hash):
 
         if "blockhash" in tx:
             height_details = await call_method_node("getblock", [tx["blockhash"]])
-
             tx["blockheight"] = dict(height_details["result"])["height"]
 
         return tx, 200
+    
     except Exception as e:
         raise e
 
@@ -299,6 +292,7 @@ async def get_txs_for_address(address):
         txs["pagesTotal"] = 0
         txs["currentPage"] = 0
         return txs, 200
+    
     except Exception as e:
         raise e
 
@@ -318,6 +312,7 @@ async def get_block_details(blockhash):
         block["reward"] = get_block_reward(block)
         status = 200
         return block, status
+
     except Exception as e:
         log_error(e)
         return {"error": e}, 500
@@ -340,6 +335,7 @@ async def get_address_utxos(address):
         ]
         utxos_formatted.reverse()
         return utxos_formatted, 200
+    
     except Exception as e:
         log_error(e)
         return {"error": e}, 500
@@ -355,8 +351,6 @@ async def get_address_details(address):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
         txs = await get_txs_for_address(address)
-        if type(txs[0]) is Exception or type(txs[1]) is Exception:
-            raise
 
         if txs[1] != 200:
             return txs[0], txs[1]
@@ -375,7 +369,6 @@ async def get_address_details(address):
 
         address_details["balance"] = total_balance / 100000000.0
         address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
-
         address_details["transactions"] = [tx[0]["txid"] for tx in txs["txs"]]
 
         address_details["txApperances"] = len(address_details["transactions"])
@@ -397,6 +390,7 @@ async def get_address_details(address):
         address_details["totalSent"] = float(total_sent)
         address_details["totalSentSat"] = int(total_sent * 100000000)
         return address_details, 200
+    
     except Exception as e:
         log_error(e)
         return {"error": {e}}, 500
