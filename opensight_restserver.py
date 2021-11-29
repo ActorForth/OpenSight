@@ -27,7 +27,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TIMEOUT_SECONDS = 10
+TIMEOUT_SECONDS = int(os.environ.get("SESSION_TIMEOUT", 10))
 session_timeout = aiohttp.ClientTimeout(total=None,sock_connect=TIMEOUT_SECONDS,sock_read=TIMEOUT_SECONDS)
 session = aiohttp.ClientSession(timeout=session_timeout)
 app = FastAPI()
