@@ -19,7 +19,9 @@ from fastapi import FastAPI, Response
 getcontext().prec = 8 # Decimal precision
 logger = logging.getLogger(__name__)
 
-session = aiohttp.ClientSession()
+TIMEOUT_SECONDS = 10
+session_timeout = aiohttp.ClientTimeout(total=None,sock_connect=TIMEOUT_SECONDS,sock_read=TIMEOUT_SECONDS)
+session = aiohttp.ClientSession(timeout=session_timeout)
 app = FastAPI()
 
 ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
