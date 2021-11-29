@@ -11,12 +11,20 @@ from decimal import Decimal, getcontext
 from functools import wraps
 import asyncio
 import aiohttp
+import traceback
 
 import requests
 from cashaddress import convert
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, HTTPException
 
 getcontext().prec = 8 # Decimal precision
+
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
+)
 logger = logging.getLogger(__name__)
 
 TIMEOUT_SECONDS = 10
@@ -60,12 +68,14 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
         @wraps(f)
         async def func_with_retries(*args, **kwargs):
             _tries, _delay = total_tries + 1, initial_wait
+            result = {}
+            status = 0
             while _tries > 1:
                 _tries -= 1
                 try:
                     log(f'{total_tries + 1 - _tries}. try:', logger)
                     result, status = await f(*args, **kwargs)
-                    log(f'status: {status}', logger)
+                    logging.info(f'status: {status}')
                     if status in [200, 400, 404, 409]:
                         return result, status
                 except exceptions as e:
@@ -76,8 +86,8 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                                   f'Failed despite best efforts after {total_tries} tries.\n'
                                   f'args: {print_args}, kwargs: {kwargs}')
                         log(msg, logger)
-                        raise
-                    
+                        raise e
+
                 print_args = args if args else 'no args'
                 msg = str(f'Function: {f.__name__}\n'
                             f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
@@ -86,8 +96,10 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
                 time.sleep(_delay)
                 _delay *= backoff_factor
 
-            return None, 500
-
+            log(f'Last Result: {result}')
+            log(f'Last Status: {status}')
+            raise HTTPException(status_code=500, detail="Error communicating with node")
+            
         return func_with_retries
     return retry_decorator
 
@@ -97,6 +109,12 @@ def log(msg, logger=None):
     else:
         print(msg)
 
+def log_error(e):
+    exc_info = sys.exc_info()
+    logging.debug(traceback.print_exception(*exc_info))
+    del exc_info
+    logging.debug(traceback.print_exc())
+    logging.error(f'exception: {e}')
 
 def address_to_public_key_hash(address):
     address = convert.to_cash_address(address)
@@ -129,16 +147,17 @@ def connect_to_tcp(host, port):  # pragma: no cover
 async def call_method_node(method, params):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "application/json; "}
-    async with session.post(
-                "http://{}:{}@{}:{}".format(
-                    NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
-                ),
-                headers=request_headers,
-                data=json.dumps(payload),
-            ) as resp:
-                json_response = await resp.json()
-                return json_response
-
+        async with session.post(
+                    "http://{}:{}@{}:{}".format(
+                        NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
+                    ),
+                    headers=request_headers,
+                    data=json.dumps(payload),
+                ) as resp:
+                    json_response = await resp.json()                
+                    return json_response
+    except Exception as e:
+        raise e
 
 def call_method_electrum(method, params=None, id=0): # pragma: no cover
     # previously had _id as a parameter. changed in code to id
@@ -257,7 +276,7 @@ async def get_tx_details(tx_hash):
 
         return tx, 200
     except Exception as e:
-        return e, 500
+        raise e
 
 
 async def get_txs_for_address(address):
@@ -281,7 +300,7 @@ async def get_txs_for_address(address):
         txs["currentPage"] = 0
         return txs, 200
     except Exception as e:
-        return e, 500
+        raise e
 
 @retry(Exception, logger=logger)
 async def get_block_details(blockhash):
@@ -300,8 +319,8 @@ async def get_block_details(blockhash):
         status = 200
         return block, status
     except Exception as e:
-        log(f'exception: {e}', logger)
-        return e, 500
+        log_error(e)
+        return {"error": e}, 500
 
 @retry(Exception, logger=logger)
 async def get_address_utxos(address):
@@ -322,8 +341,8 @@ async def get_address_utxos(address):
         utxos_formatted.reverse()
         return utxos_formatted, 200
     except Exception as e:
-        log(f'exception: {e}', logger)
-        return e, 500
+        log_error(e)
+        return {"error": e}, 500
 
 @app.get("/")
 async def entry_point(response: Response):
@@ -379,8 +398,8 @@ async def get_address_details(address):
         address_details["totalSentSat"] = int(total_sent * 100000000)
         return address_details, 200
     except Exception as e:
-        log(f'exception: {e}', logger)
-        return e, 500
+        log_error(e)
+        return {"error": {e}}, 500
 
 @app.get("/api/addr/{address}")
 async def address_details(address, response: Response):
