@@ -371,7 +371,7 @@ async def get_address_details(address):
         address_details["unconfirmedBalance"] = balance["unconfirmed"] / 100000000.0
         address_details["transactions"] = [tx[0]["txid"] for tx in txs["txs"]]
 
-        address_details["txApperances"] = len(address_details["transactions"])
+        address_details["txAppearances"] = len(address_details["transactions"])
         total_received = 0
         txs_unconfirmed_qty = 0
         for tx in txs["txs"]:
@@ -384,7 +384,7 @@ async def get_address_details(address):
 
         total_sent = total_received - Decimal(address_details["balance"])
 
-        address_details["unconfirmedTxApperances"] = txs_unconfirmed_qty
+        address_details["unconfirmedTxAppearances"] = txs_unconfirmed_qty
         address_details["totalReceived"] = float(total_received)
         address_details["totalReceivedSat"] = int(total_received * 100000000)
         address_details["totalSent"] = float(total_sent)
