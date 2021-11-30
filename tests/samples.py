@@ -126,8 +126,8 @@ address_details = {
     "transactions": [
         "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce"
     ],
-    "txApperances": 1,
-    "unconfirmedTxApperances": 1,
+    "txAppearances": 1,
+    "unconfirmedTxAppearances": 1,
     "totalReceived": 1.0,
     "totalReceivedSat": 100000000,
     "totalSent": 0.0,
