@@ -41,6 +41,7 @@ NODE_RPC_USER = os.environ.get("NODE_RPC_USER", "regtest")
 NODE_RPC_PASS = os.environ.get("NODE_RPC_PASS", "regtest")
 
 OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", "3001")
+NETWORK = os.environ.get("NETWORK", "regtest")
 
 TIMEOUT_DELAY = 0.05
 TOTAL_RETRIES = 4
@@ -116,7 +117,10 @@ def log_error(e):
     logging.error(f'exception: {e}')
 
 def address_to_public_key_hash(address):
-    address = convert.to_cash_address(address)
+    if NETWORK == "regtest":
+        address = convert.to_cash_address(address, regtest=True)
+    else:
+        address = convert.to_cash_address(address)
     Address = convert.Address._cash_string(address)
     return bytes(Address.payload)
 
@@ -219,6 +223,16 @@ def format_tx_vout(vout):
     return vout
 
 
+def convert_fulcrum(address):
+    if( ELECTRUM_HOST == "fulcrum"):
+        if NETWORK == "regtest":
+            return convert.to_cash_address(address, True)        
+        else:
+            return convert.to_cash_address(address)
+    else:
+        return address
+    
+
 def get_block_reward(block):
     amount = 0
     coinbase_tx = block["tx"][0]
@@ -275,6 +289,7 @@ async def get_tx_details(tx_hash):
 async def get_txs_for_address(address):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
+        address = convert_fulcrum(address)
 
         tx_history = call_method_electrum(
             "blockchain.address.get_history", [address]
@@ -321,6 +336,7 @@ async def get_block_details(blockhash):
 async def get_address_utxos(address):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
+        address = convert_fulcrum(address)
 
         # Get the UTXOs for the given address
         utxos = call_method_electrum("blockchain.address.listunspent", [address])
@@ -350,6 +366,8 @@ async def entry_point(response: Response):
 async def get_address_details(address):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
+        address = convert_fulcrum(address)
+
         txs = await get_txs_for_address(address)
 
         if txs[1] != 200:
