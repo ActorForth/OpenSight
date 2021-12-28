@@ -1,5 +1,4 @@
-# app.py - a minimal flask api using flask_restful
-from asyncio.tasks import create_task
+import asyncio
 import hashlib
 import json
 import logging
@@ -7,14 +6,13 @@ import os
 import socket
 import sys
 import time
+import traceback
 from decimal import Decimal, getcontext
 from functools import wraps
-import asyncio
-import aiohttp
-import traceback
 
+import aiohttp
 from cashaddress import convert
-from fastapi import FastAPI, Response, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 
 getcontext().prec = 8  # Decimal precision
 
@@ -26,12 +24,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TIMEOUT_SECONDS = int(os.environ.get("SESSION_TIMEOUT", 10))
-session_timeout = aiohttp.ClientTimeout(
-    total=None, sock_connect=TIMEOUT_SECONDS, sock_read=TIMEOUT_SECONDS
-)
-session = aiohttp.ClientSession(timeout=session_timeout)
 app = FastAPI()
+
+
+@app.on_event("startup")
+async def startup():
+    TIMEOUT_SECONDS = int(os.environ.get("SESSION_TIMEOUT", 10))
+    PARALLEL_REQUESTS = int(os.environ.get("PARALLEL_REQUESTS", 100))
+
+    session_timeout = aiohttp.ClientTimeout(
+        total=None, sock_connect=TIMEOUT_SECONDS, sock_read=TIMEOUT_SECONDS
+    )
+    tcp_connector = aiohttp.TCPConnector(
+        limit_per_host=PARALLEL_REQUESTS, limit=0, ttl_dns_cache=300
+    )
+    app.state.http_session = aiohttp.ClientSession(
+        connector=tcp_connector, timeout=session_timeout
+    )
+    app.state.http_semaphore = asyncio.Semaphore(PARALLEL_REQUESTS)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await app.state.http_session.close()
+
 
 ELECTRUM_HOST = os.environ.get("ELECTRUM_HOST", "bitcoind-regtest")
 ELECTRUM_PORT = int(os.environ.get("ELECTRUM_PORT", 50001))
@@ -46,7 +62,7 @@ OPENSIGHT_PORT = os.environ.get("OPENSIGHT_PORT", "3001")
 TIMEOUT_DELAY = 0.05
 TOTAL_RETRIES = 4
 BACKOFF_FACTOR = 2
-VERSION = "v1.0.4"
+VERSION = "v1.0.5"
 
 OP_CHECKSIG = b"\xac"
 OP_DUP = b"v"
@@ -81,9 +97,7 @@ def retry(
             while _tries > 1:
                 _tries -= 1
                 try:
-                    log(f"{total_tries + 1 - _tries}. try:", logger)
                     result, status = await f(*args, **kwargs)
-                    logging.info(f"status: {status}")
                     if status in [200, 400, 404, 409]:
                         return result, status
                 except exceptions as e:
@@ -159,19 +173,23 @@ def connect_to_tcp(host, port):  # pragma: no cover
     return client
 
 
-async def call_method_node(method, params):
+async def call_method_node(
+    method, params, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
+):
     payload = {"jsonrpc": "1.0", "id": 0, "method": method, "params": params}
     request_headers = {"content-type": "application/json; "}
     try:
-        async with session.post(
-            "http://{}:{}@{}:{}".format(
-                NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
-            ),
-            headers=request_headers,
-            data=json.dumps(payload),
-        ) as resp:
-            json_response = await resp.json()
-            return json_response
+        async with semaphore:
+            async with session.post(
+                "http://{}:{}@{}:{}".format(
+                    NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
+                ),
+                headers=request_headers,
+                data=json.dumps(payload),
+                ssl=False,
+            ) as resp:
+                json_response = await resp.json()
+                return json_response
     except Exception as e:
         raise e
 
@@ -223,9 +241,13 @@ def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
     return res_utxo
 
 
-async def format_tx_vin(vin, n):
+async def format_tx_vin(
+    vin, n, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
+):
     if not "coinbase" in vin:
-        tx_vout = await call_method_node("getrawtransaction", [vin["txid"], True])
+        tx_vout = await call_method_node(
+            "getrawtransaction", [vin["txid"], True], session, semaphore
+        )
         tx_vout = dict(tx_vout["result"])
         vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
         vin["cashAddress"] = tx_vout["vout"][vin["vout"]]["scriptPubKey"]["addresses"][
@@ -258,18 +280,23 @@ def get_block_reward(block):
     return amount / 100000000.0
 
 
-async def get_tx_details(tx_hash):
+async def get_tx_details(
+    tx_hash, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
+):
     try:
         tx = {}
-        tx = await call_method_node("getrawtransaction", [tx_hash, True])
+        tx = await call_method_node(
+            "getrawtransaction", [tx_hash, True], session, semaphore
+        )
         if not tx:
             return "Not found", 404
-
         tx = dict(tx["result"])
 
         vin_tasks = []
         for n, vin in enumerate(tx["vin"]):
-            vin_tasks.append(asyncio.create_task(format_tx_vin(vin, n)))
+            vin_tasks.append(
+                asyncio.create_task(format_tx_vin(vin, n, session, semaphore))
+            )
 
         tx["vin"] = await asyncio.gather(*vin_tasks)
 
@@ -288,7 +315,9 @@ async def get_tx_details(tx_hash):
             tx["fees"] = float(tx["fees"])
 
         if "blockhash" in tx:
-            height_details = await call_method_node("getblock", [tx["blockhash"]])
+            height_details = await call_method_node(
+                "getblock", [tx["blockhash"]], session, semaphore
+            )
             tx["blockheight"] = dict(height_details["result"])["height"]
 
         return tx, 200
@@ -297,15 +326,17 @@ async def get_tx_details(tx_hash):
         raise e
 
 
-async def get_txs_for_address(address):
+async def get_txs_for_address(
+    address, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
+):
     try:
-        p2pkh_script, script_hash = script_hash_from_address(address)
-
         tx_history = call_method_electrum("blockchain.address.get_history", [address])
         txs = {}
         tasks = []
         for tx in tx_history:
-            tasks.append(asyncio.create_task(get_tx_details(tx["tx_hash"])))
+            tasks.append(
+                asyncio.create_task(get_tx_details(tx["tx_hash"], session, semaphore))
+            )
 
         # tasks = [await asyncio.create_task(get_tx_details(tx["tx_hash"]) for tx in tx_history)]
         results = await asyncio.gather(*tasks)
@@ -321,9 +352,13 @@ async def get_txs_for_address(address):
 
 
 @retry(Exception, logger=logger)
-async def get_block_details(blockhash):
+async def get_block_details(
+    blockhash, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
+):
     try:
-        block = await call_method_node("getblock", [blockhash, True])
+        block = await call_method_node(
+            "getblock", [blockhash, True], session, semaphore
+        )
         if not block:
             status = 404
             return {"message": "block id not found"}, status
@@ -343,7 +378,9 @@ async def get_block_details(blockhash):
 
 
 @retry(Exception, logger=logger)
-async def get_address_utxos(address):
+async def get_address_utxos(
+    address, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
+):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
 
@@ -351,7 +388,7 @@ async def get_address_utxos(address):
         utxos = call_method_electrum("blockchain.address.listunspent", [address])
 
         # Get current blockchain height
-        best_block = await call_method_node("getblockcount", [])
+        best_block = await call_method_node("getblockcount", [], session, semaphore)
         best_block = best_block["result"]
         # Adjust the format of UTXOs to match what rest.bitcoin.com expects
         utxos_formatted = [
@@ -373,10 +410,12 @@ async def entry_point(response: Response):
 
 
 @retry(Exception, logger=logger)
-async def get_address_details(address):
+async def get_address_details(
+    address, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
+):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
-        txs = await get_txs_for_address(address)
+        txs = await get_txs_for_address(address, session, semaphore)
 
         if txs[1] != 200:
             return txs[0], txs[1]
@@ -423,38 +462,50 @@ async def get_address_details(address):
 
 
 @app.get("/api/addr/{address}")
-async def address_details(address, response: Response):
-    result, status = await get_address_details(address)
+async def address_details(request: Request, address, response: Response):
+    result, status = await get_address_details(
+        address, request.app.state.http_session, request.app.state.http_semaphore
+    )
     response.status_code = status
     return result
 
 
 @app.get("/api/tx/{transaction}")
-async def transaction_detail(transaction, response: Response):
-    result, status = await get_tx_details(transaction)
+async def transaction_detail(request: Request, transaction, response: Response):
+    result, status = await get_tx_details(
+        transaction, request.app.state.http_session, request.app.state.http_semaphore
+    )
     response.status_code = status
     return result
 
 
 @app.get("/api/txs/")
-async def transactions(response: Response, address=None, pageNum=None):
+async def transactions(
+    request: Request, response: Response, address=None, pageNum=None
+):
     if address == None:
         response.status_code = 400
         return "address cannot be empty"
-    result, status = await get_txs_for_address(address)
+    result, status = await get_txs_for_address(
+        address, request.app.state.http_session, request.app.state.http_semaphore
+    )
     response.status_code = status
     return result
 
 
 @app.get("/api/addr/{address}/utxo")
-async def address_utxos(address, response: Response):
-    result, status = await get_address_utxos(address)
+async def address_utxos(request: Request, address, response: Response):
+    result, status = await get_address_utxos(
+        address, request.app.state.http_session, request.app.state.http_semaphore
+    )
     response.status_code = status
     return result
 
 
 @app.get("/api/block/{blockhash}")
-async def block_details(blockhash, response: Response):
-    result, status = await get_block_details(blockhash)
+async def block_details(request: Request, blockhash, response: Response):
+    result, status = await get_block_details(
+        blockhash, request.app.state.http_session, request.app.state.http_semaphore
+    )
     response.status_code = status
     return result
