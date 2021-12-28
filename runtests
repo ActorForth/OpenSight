@@ -1,0 +1,3 @@
+#!/bin/bash
+
+PYTHONPATH=$(pwd) pytest -vv --cov-report term-missing --cov=opensight_restserver --cov-config .coveragerc

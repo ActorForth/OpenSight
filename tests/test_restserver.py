@@ -1,47 +1,34 @@
-import asyncio
 import json
-import logging
-import pytest
-import nest_asyncio
-
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
-from opensight_restserver import app, format_tx_vin, format_utxo_from_electrum, get_tx_details, log
-from samples import (
-    tx_history_1,
-    tx_history_balance,
-    call_node_1,
-    call_node_2,
-    address_details,
-    address_utxo,
-    address_tx,
-    address_result,
-    transaction_tx_2,
-    transaction_call_method_1,
-    transaction_call_method_tx,
-    transaction_call_method_2,
-    transaction_details_with_blockhash,
-    transaction_details_with_blockhash_response,
-    transaction_details_with_coinbase,
-    transaction_details_with_coinbase_response,
-    block_hash_call_method_node,
-    block_hash_electrum_result,
-    block_hash_electrum_result_value_satoshi,
-    block_hash_electrum_result_without_value,
-    block_hash_result,
-    block_hash_result_no_reward,
-    mocked_post_txid1,
-    mocked_post_txid2,
-    get_block_details_blockhash,
-    get_transaction_details_tx,
-    utxo_from_electrum,
-)
 from unittest import mock
 
+import nest_asyncio
+import pytest
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
+from opensight_restserver import (app, format_tx_vin,
+                                  format_utxo_from_electrum, get_tx_details,
+                                  log)
+
+from samples import (address_details, address_result, address_tx, address_utxo,
+                     block_hash_call_method_node, block_hash_electrum_result,
+                     block_hash_electrum_result_value_satoshi,
+                     block_hash_electrum_result_without_value,
+                     block_hash_result, block_hash_result_no_reward,
+                     call_node_1, call_node_2, get_block_details_blockhash,
+                     get_transaction_details_tx, mocked_post_txid1,
+                     mocked_post_txid2, transaction_call_method_1,
+                     transaction_call_method_2, transaction_call_method_tx,
+                     transaction_details_with_blockhash,
+                     transaction_details_with_blockhash_response,
+                     transaction_details_with_coinbase,
+                     transaction_details_with_coinbase_response,
+                     transaction_tx_2, tx_history_1, tx_history_balance,
+                     utxo_from_electrum)
 
 nest_asyncio.apply()
 
 ADDRESS_ENDPOINT_TEST_ADDRESS = "mofnoitUXBfNFLKqwwomj5KwBVqJeydSyx"
+
 
 def mock_electrum_connect(*args, **kwargs):
     case = {
@@ -54,6 +41,7 @@ def mock_electrum_connect(*args, **kwargs):
     }
     return case.get(kwargs.get("key"), "invalid")
 
+
 def mock_call_node(*args, **kwargs):
     case = {
         "1": call_node_1,
@@ -65,7 +53,7 @@ def mock_call_node(*args, **kwargs):
         "transaction_details_with_coinbase": transaction_details_with_coinbase,
         "get_block_details": block_hash_call_method_node,
         "get_utxo_for_address": {"result": 229},  # best block
-        "empty": 0
+        "empty": 0,
     }
     return case.get(kwargs.get("key"), "invalid")
 
@@ -87,31 +75,28 @@ class MockResponse:
 
 def mocked_post(*args, **kwargs):
     # Mocks the post requests to electrum for address balance and txs
-    
+
     data = kwargs.get("data")
     json_data = json.loads(data)
-    if (
-        json_data["params"][0]
-        == mocked_post_txid1
-    ):
+    if json_data["params"][0] == mocked_post_txid1:
         return MockResponse(call_node_1, 200)
-    if (
-        json_data["params"][0]
-        == mocked_post_txid2
-    ):
+    if json_data["params"][0] == mocked_post_txid2:
         return MockResponse(call_node_2, 200)
 
     return MockResponse(None, 404)
 
+
 @pytest.mark.asyncio
 class Tests:
     def test_default_endpoint(self):
-        client = TestClient(app)
-        url = "/"
-        response = client.get(url)
-        assert response.json() == {'platform': 'opensight', 'version': 'v1.0.4'}
+        with TestClient(app) as client:
+            url = "/"
+            response = client.get(url)
+            assert response.json() == {"platform": "opensight", "version": "v1.0.4"}
 
-    @mock.patch("opensight_restserver.aiohttp.ClientSession.post", side_effect=mocked_post)
+    @mock.patch(
+        "opensight_restserver.aiohttp.ClientSession.post", side_effect=mocked_post
+    )
     @mock.patch("opensight_restserver.call_method_electrum")
     def test_get_address_details(self, mock1, mock2):
         mock1.side_effect = [
@@ -119,12 +104,11 @@ class Tests:
             mock_electrum_connect(key="get_address_details_2"),
         ]
 
-        client = TestClient(app)
-        address = ADDRESS_ENDPOINT_TEST_ADDRESS
-        url = f"/api/addr/{address}"
-        response = client.get(url)
-        assert response.json() == address_details
-        
+        with TestClient(app) as client:
+            address = ADDRESS_ENDPOINT_TEST_ADDRESS
+            url = f"/api/addr/{address}"
+            response = client.get(url)
+            assert response.json() == address_details
 
     @mock.patch("opensight_restserver.aiohttp.ClientSession.post")
     @mock.patch("opensight_restserver.call_method_electrum")
@@ -144,11 +128,11 @@ class Tests:
             MockResponse(json_data=call_node_2, status_code=200),
         ]
 
-        client = TestClient(app)
-        address = ADDRESS_ENDPOINT_TEST_ADDRESS
-        url = f"/api/addr/{address}"
-        response = client.get(url)
-        assert response.json() == address_details
+        with TestClient(app) as client:
+            address = ADDRESS_ENDPOINT_TEST_ADDRESS
+            url = f"/api/addr/{address}"
+            response = client.get(url)
+            assert response.json() == address_details
 
     @mock.patch("opensight_restserver.call_method_electrum")
     def test_get_address_details_exception(self, mock1):
@@ -159,12 +143,12 @@ class Tests:
             Exception("get_txs_for_address_error_mock"),
         ]
         with pytest.raises(Exception):
-            client = TestClient(app)
-            address = ADDRESS_ENDPOINT_TEST_ADDRESS
-            url = f"/api/addr/{address}"
-            response = client.get(url)
-            assert response.json() == None
-            assert response.status_code == 500
+            with TestClient(app) as client:
+                address = ADDRESS_ENDPOINT_TEST_ADDRESS
+                url = f"/api/addr/{address}"
+                response = client.get(url)
+                assert response.json() == None
+                assert response.status_code == 500
 
     @mock.patch("opensight_restserver.call_method_electrum")
     def test_get_utxo_for_address_exception(self, mock1):
@@ -174,15 +158,13 @@ class Tests:
             HTTPException(status_code=500, detail="beat_error"),
             HTTPException(status_code=500, detail="beat_error"),
         ]
-        
-        client = TestClient(app)
-        address = ADDRESS_ENDPOINT_TEST_ADDRESS
-        url = f"/api/addr/{address}/utxo"
 
-        response = client.get(url)
-
-        assert response.json() == {"detail": "Error communicating with node"}
-        assert response.status_code == 500
+        with TestClient(app) as client:
+            address = ADDRESS_ENDPOINT_TEST_ADDRESS
+            url = f"/api/addr/{address}/utxo"
+            response = client.get(url)
+            assert response.json() == {"detail": "Error communicating with node"}
+            assert response.status_code == 500
 
     @mock.patch("opensight_restserver.call_method_node")
     @mock.patch("opensight_restserver.call_method_electrum")
@@ -191,47 +173,41 @@ class Tests:
             mock_electrum_connect(key="get_utxo_for_address_1"),
             mock_electrum_connect(key="get_utxo_for_address_2"),
         ]
-        mock2.side_effect = [
-            mock_call_node(key="get_utxo_for_address")
-        ]
-        
-        client = TestClient(app)
-        address = ADDRESS_ENDPOINT_TEST_ADDRESS
-        url = f"/api/addr/{address}/utxo"
+        mock2.side_effect = [mock_call_node(key="get_utxo_for_address")]
 
-        response = client.get(url)
-
-        assert response.json() == address_result
+        with TestClient(app) as client:
+            address = ADDRESS_ENDPOINT_TEST_ADDRESS
+            url = f"/api/addr/{address}/utxo"
+            response = client.get(url)
+            assert response.json() == address_result
 
     @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details_if_coinbase(self, mock1):
         mock1.side_effect = [
             mock_call_node(key="transaction_details_with_coinbase"),
             mock_call_node(key="transaction_details_2"),
-            {"result": {"height": 16}}
+            {"result": {"height": 16}},
         ]
         transaction = get_transaction_details_tx
         url = f"/api/tx/{transaction}"
-        client = TestClient(app)
-        response = client.get(url)
-        
-        assert response.json() == transaction_details_with_coinbase_response
-        assert response.status_code == 200
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == transaction_details_with_coinbase_response
+            assert response.status_code == 200
 
     @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details_if_blockhash(self, mock1):
         mock1.side_effect = [
             mock_call_node(key="transaction_details_with_blockhash"),
             mock_call_node(key="transaction_details_2"),
-            {"result": {"height": 16}}
+            {"result": {"height": 16}},
         ]
         transaction = get_transaction_details_tx
         url = f"/api/tx/{transaction}"
-        client = TestClient(app)
-        response = client.get(url)
-
-        assert response.json() == transaction_details_with_blockhash_response
-        assert response.status_code == 200
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == transaction_details_with_blockhash_response
+            assert response.status_code == 200
 
     @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details_exception(self, mock1):
@@ -244,10 +220,10 @@ class Tests:
         transaction = get_transaction_details_tx
         with pytest.raises(Exception):
             url = f"/api/tx/{transaction}"
-            client = TestClient(app)
-            response = client.get(url)
-            assert response.json() == {}
-            assert response.status_code == 500
+            with TestClient(app) as client:
+                response = client.get(url)
+                assert response.json() == {}
+                assert response.status_code == 500
 
     @mock.patch("opensight_restserver.call_method_node")
     def test_transaction_details(self, mock1):
@@ -258,10 +234,9 @@ class Tests:
         ]
         transaction = get_transaction_details_tx
         url = f"/api/tx/{transaction}"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == transaction_tx_2
-
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == transaction_tx_2
 
     @mock.patch("opensight_restserver.call_method_electrum")
     @mock.patch("opensight_restserver.call_method_node")
@@ -271,9 +246,9 @@ class Tests:
         blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == block_hash_result
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == block_hash_result
 
     @mock.patch("opensight_restserver.call_method_electrum")
     @mock.patch("opensight_restserver.call_method_node")
@@ -283,21 +258,23 @@ class Tests:
         blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == block_hash_result_no_reward
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == block_hash_result_no_reward
 
     @mock.patch("opensight_restserver.call_method_electrum")
     @mock.patch("opensight_restserver.call_method_node")
     def test_get_block_details_value_satoshi(self, mock1, mock2):
         mock1.side_effect = [mock_call_node(key="get_block_details")]
-        mock2.side_effect = [mock_electrum_connect(key="get_block_details_value_satoshi")]
+        mock2.side_effect = [
+            mock_electrum_connect(key="get_block_details_value_satoshi")
+        ]
         blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == block_hash_result
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == block_hash_result
 
     @mock.patch("opensight_restserver.call_method_node")
     async def test_get_block_details_no_block_found(self, mock1):
@@ -305,33 +282,22 @@ class Tests:
         blockhash = get_block_details_blockhash
 
         url = f"/api/block/{blockhash}"
-        client = TestClient(app)
-        response = client.get(url)
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == {"message": "block id not found"}
+            assert response.status_code == 404
 
-        assert response.json() == {'message': 'block id not found'}
-        assert response.status_code == 404
-
-    def test_log_if(self):
-        log("beat_test_log_lol_>////<")
-
-    def test_log_else(self):
-        logger = logging.getLogger(__name__)
-        log("beat_test_log_lol_>////<", logger)
 
     @mock.patch("opensight_restserver.call_method_node")
     async def test_get_tx_details_404(self, mock1):
-        mock1.side_effect = [
-            mock_call_node(key = "empty")
-        ]
-        result, status = await get_tx_details("thank")
+        mock1.side_effect = [mock_call_node(key="empty")]
+        result, status = await get_tx_details("thank", None, None)
         assert result == "Not found"
         assert status == 404
 
     @mock.patch("opensight_restserver.call_method_electrum")
-    def test_format_utxo_from_electrum(self,mock1):
-        mock1.side_effect = [
-            mock_electrum_connect(key="get_utxo_for_address_1")
-        ]
+    def test_format_utxo_from_electrum(self, mock1):
+        mock1.side_effect = [mock_electrum_connect(key="get_utxo_for_address_1")]
         utxo = {
             "height": 2,
             "tx_hash": "13f46c6c25a22d8dbac9e01f0d8d4e2f68d37214eb282362f2e48be12d8b53ce",
@@ -348,22 +314,22 @@ class Tests:
 
     def test_transactions_not_found(self):
         url = "/api/txs/"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == "address cannot be empty"
-        assert response.status_code == 400
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == "address cannot be empty"
+            assert response.status_code == 400
 
     @mock.patch("opensight_restserver.get_txs_for_address")
-    def test_transactions_with_mock(self,mock1):
+    def test_transactions_with_mock(self, mock1):
         mock1.side_effect = [
             # mock_electrum_connect(key="get_utxo_for_address_2")
             (address_tx, 200)
         ]
         url = "/api/txs/?address=test_address"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == address_tx
-        assert response.status_code == 200
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == address_tx
+            assert response.status_code == 200
 
     @mock.patch("opensight_restserver.call_method_node")
     def test_block_details_retry_exception(self, mock1):
@@ -376,8 +342,7 @@ class Tests:
 
         height = 16
         url = f"/api/block/{height}"
-        client = TestClient(app)
-        response = client.get(url)
-        assert response.json() == {'detail': 'Error communicating with node'}
-        assert response.status_code == 500
-
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.json() == {"detail": "Error communicating with node"}
+            assert response.status_code == 500
