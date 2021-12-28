@@ -13,11 +13,10 @@ import asyncio
 import aiohttp
 import traceback
 
-import requests
 from cashaddress import convert
 from fastapi import FastAPI, Response, HTTPException
 
-getcontext().prec = 8 # Decimal precision
+getcontext().prec = 8  # Decimal precision
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -28,7 +27,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TIMEOUT_SECONDS = int(os.environ.get("SESSION_TIMEOUT", 10))
-session_timeout = aiohttp.ClientTimeout(total=None,sock_connect=TIMEOUT_SECONDS,sock_read=TIMEOUT_SECONDS)
+session_timeout = aiohttp.ClientTimeout(
+    total=None, sock_connect=TIMEOUT_SECONDS, sock_read=TIMEOUT_SECONDS
+)
 session = aiohttp.ClientSession(timeout=session_timeout)
 app = FastAPI()
 
@@ -54,7 +55,13 @@ OP_HASH160 = b"\xa9"
 OP_PUSH_20 = b"\x14"
 
 
-def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, backoff_factor=BACKOFF_FACTOR, logger=None):
+def retry(
+    exceptions,
+    total_tries=TOTAL_RETRIES,
+    initial_wait=TIMEOUT_DELAY,
+    backoff_factor=BACKOFF_FACTOR,
+    logger=None,
+):
     """
     calling the decorated function applying an exponential backoff.
     Args:
@@ -64,6 +71,7 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
         backoff_factor: Backoff multiplier (e.g. value of 2 will double the delay each retry).
         logger: logger to be used, if none specified print
     """
+
     def retry_decorator(f):
         @wraps(f)
         async def func_with_retries(*args, **kwargs):
@@ -73,34 +81,40 @@ def retry(exceptions, total_tries=TOTAL_RETRIES, initial_wait=TIMEOUT_DELAY, bac
             while _tries > 1:
                 _tries -= 1
                 try:
-                    log(f'{total_tries + 1 - _tries}. try:', logger)
+                    log(f"{total_tries + 1 - _tries}. try:", logger)
                     result, status = await f(*args, **kwargs)
-                    logging.info(f'status: {status}')
+                    logging.info(f"status: {status}")
                     if status in [200, 400, 404, 409]:
                         return result, status
                 except exceptions as e:
-                    print_args = args if args else 'no args'
+                    print_args = args if args else "no args"
                     if _tries == 1:
-                        msg = str(f'Function: {f.__name__}\n'
-                                  f'Failed despite best efforts after {total_tries} tries.\n'
-                                  f'args: {print_args}, kwargs: {kwargs}')
+                        msg = str(
+                            f"Function: {f.__name__}\n"
+                            f"Failed despite best efforts after {total_tries} tries.\n"
+                            f"args: {print_args}, kwargs: {kwargs}"
+                        )
                         log(msg, logger)
                         raise e
 
-                print_args = args if args else 'no args'
-                msg = str(f'Function: {f.__name__}\n'
-                            f'Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n')
+                print_args = args if args else "no args"
+                msg = str(
+                    f"Function: {f.__name__}\n"
+                    f"Retrying in {_delay} seconds!, args: {print_args}, kwargs: {kwargs}\n"
+                )
                 log(msg, logger)
-    
+
                 time.sleep(_delay)
                 _delay *= backoff_factor
 
-            log(f'Last Result: {result}')
-            log(f'Last Status: {status}')
+            log(f"Last Result: {result}")
+            log(f"Last Status: {status}")
             raise HTTPException(status_code=500, detail="Error communicating with node")
-            
+
         return func_with_retries
+
     return retry_decorator
+
 
 def log(msg, logger=None):
     if logger:
@@ -108,12 +122,14 @@ def log(msg, logger=None):
     else:
         print(msg)
 
+
 def log_error(e):
     exc_info = sys.exc_info()
     logging.debug(traceback.print_exception(*exc_info))
     del exc_info
     logging.debug(traceback.print_exc())
-    logging.error(f'exception: {e}')
+    logging.error(f"exception: {e}")
+
 
 def address_to_public_key_hash(address):
     address = convert.to_cash_address(address)
@@ -148,33 +164,40 @@ async def call_method_node(method, params):
     request_headers = {"content-type": "application/json; "}
     try:
         async with session.post(
-                    "http://{}:{}@{}:{}".format(
-                        NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
-                    ),
-                    headers=request_headers,
-                    data=json.dumps(payload),
-                ) as resp:
-                    json_response = await resp.json()                
-                    return json_response
+            "http://{}:{}@{}:{}".format(
+                NODE_RPC_USER, NODE_RPC_PASS, NODE_RPC_HOST, NODE_RPC_PORT
+            ),
+            headers=request_headers,
+            data=json.dumps(payload),
+        ) as resp:
+            json_response = await resp.json()
+            return json_response
     except Exception as e:
         raise e
 
-def call_method_electrum(method, params=None, id=0): # pragma: no cover
+
+def call_method_electrum(method, params=None, id=0):  # pragma: no cover
     # previously had _id as a parameter. changed in code to id
-    verb = False # verbose?
+    verb = False  # verbose?
     with socket.create_connection((ELECTRUM_HOST, ELECTRUM_PORT), timeout=15.0) as sock:
+
         def sndrecv(method, params=None):
-            outj = { "id" : 0, "jsonrpc" : "2.0", "method" : method, "params": params}
-            msg = json.dumps(outj, indent=None).encode("utf8") + b'\n'
-            if verb: print(f"Srv --> {msg[:2048]}")
+            outj = {"id": 0, "jsonrpc": "2.0", "method": method, "params": params}
+            msg = json.dumps(outj, indent=None).encode("utf8") + b"\n"
+            if verb:
+                print(f"Srv --> {msg[:2048]}")
             sock.send(msg)
             resp = bytearray()
-            while b'\n' not in resp:
+            while b"\n" not in resp:
                 resp += sock.recv(4096)
-            if verb: print(f"Srv <-- {resp[:2048]}")
+            if verb:
+                print(f"Srv <-- {resp[:2048]}")
             j = json.loads(resp.decode("utf8").strip())
             if j.get("error") or j.get("id") != id:
-                raise Exception("Error response from Fulcrum:\n\n" + (json.dumps(j.get("error"), indent=4) or j))
+                raise Exception(
+                    "Error response from Fulcrum:\n\n"
+                    + (json.dumps(j.get("error"), indent=4) or j)
+                )
             return j.get("result")
 
         # global ID_NEXT
@@ -205,7 +228,9 @@ async def format_tx_vin(vin, n):
         tx_vout = await call_method_node("getrawtransaction", [vin["txid"], True])
         tx_vout = dict(tx_vout["result"])
         vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
-        vin["cashAddress"] = tx_vout["vout"][vin["vout"]]["scriptPubKey"]["addresses"][0]
+        vin["cashAddress"] = tx_vout["vout"][vin["vout"]]["scriptPubKey"]["addresses"][
+            0
+        ]
         vin["doubleSpentTxID"] = None
     vin["n"] = n
     return vin
@@ -241,7 +266,7 @@ async def get_tx_details(tx_hash):
             return "Not found", 404
 
         tx = dict(tx["result"])
-        
+
         vin_tasks = []
         for n, vin in enumerate(tx["vin"]):
             vin_tasks.append(asyncio.create_task(format_tx_vin(vin, n)))
@@ -250,7 +275,7 @@ async def get_tx_details(tx_hash):
 
         tx["vout"] = [format_tx_vout(vout) for vout in tx["vout"]]
         tx.pop("hex", None)
-        
+
         if "coinbase" in tx["vin"][0]:
             tx["valueOut"] = sum([Decimal(str(vout["value"])) for vout in tx["vout"]])
             tx["valueOut"] = float(tx["valueOut"])
@@ -267,7 +292,7 @@ async def get_tx_details(tx_hash):
             tx["blockheight"] = dict(height_details["result"])["height"]
 
         return tx, 200
-    
+
     except Exception as e:
         raise e
 
@@ -276,35 +301,34 @@ async def get_txs_for_address(address):
     try:
         p2pkh_script, script_hash = script_hash_from_address(address)
 
-        tx_history = call_method_electrum(
-            "blockchain.address.get_history", [address]
-        )
+        tx_history = call_method_electrum("blockchain.address.get_history", [address])
         txs = {}
         tasks = []
         for tx in tx_history:
             tasks.append(asyncio.create_task(get_tx_details(tx["tx_hash"])))
-        
+
         # tasks = [await asyncio.create_task(get_tx_details(tx["tx_hash"]) for tx in tx_history)]
         results = await asyncio.gather(*tasks)
-        
+
         txs["txs"] = results
         # txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
         txs["pagesTotal"] = 0
         txs["currentPage"] = 0
         return txs, 200
-    
+
     except Exception as e:
         raise e
+
 
 @retry(Exception, logger=logger)
 async def get_block_details(blockhash):
     try:
         block = await call_method_node("getblock", [blockhash, True])
         if not block:
-            status = 404 
+            status = 404
             return {"message": "block id not found"}, status
         block = dict(block["result"])
-        
+
         # To investigate
         block["isMainChain"] = True
         block["poolInfo"] = {}
@@ -316,6 +340,7 @@ async def get_block_details(blockhash):
     except Exception as e:
         log_error(e)
         return {"error": e}, 500
+
 
 @retry(Exception, logger=logger)
 async def get_address_utxos(address):
@@ -335,15 +360,16 @@ async def get_address_utxos(address):
         ]
         utxos_formatted.reverse()
         return utxos_formatted, 200
-    
+
     except Exception as e:
         log_error(e)
         return {"error": e}, 500
 
+
 @app.get("/")
 async def entry_point(response: Response):
-        response.status_code = 200
-        return {"platform": "opensight", "version": VERSION}
+    response.status_code = 200
+    return {"platform": "opensight", "version": VERSION}
 
 
 @retry(Exception, logger=logger)
@@ -355,11 +381,9 @@ async def get_address_details(address):
         if txs[1] != 200:
             return txs[0], txs[1]
 
-        txs = txs[0] #txs is tuple with status_code
+        txs = txs[0]  # txs is tuple with status_code
 
-        balance = call_method_electrum(
-            "blockchain.address.get_balance", [address]
-        )
+        balance = call_method_electrum("blockchain.address.get_balance", [address])
         address_details = {}
         total_balance = balance["confirmed"] + balance["unconfirmed"]
 
@@ -380,7 +404,9 @@ async def get_address_details(address):
                 txs_unconfirmed_qty += 1
             for vout in tx[0]["vout"]:
                 if p2pkh_script.hex() == vout["scriptPubKey"]["hex"]:
-                    total_received = Decimal(total_received) + Decimal(str(vout["value"]))
+                    total_received = Decimal(total_received) + Decimal(
+                        str(vout["value"])
+                    )
 
         total_sent = total_received - Decimal(address_details["balance"])
 
@@ -390,16 +416,18 @@ async def get_address_details(address):
         address_details["totalSent"] = float(total_sent)
         address_details["totalSentSat"] = int(total_sent * 100000000)
         return address_details, 200
-    
+
     except Exception as e:
         log_error(e)
         return {"error": {e}}, 500
+
 
 @app.get("/api/addr/{address}")
 async def address_details(address, response: Response):
     result, status = await get_address_details(address)
     response.status_code = status
     return result
+
 
 @app.get("/api/tx/{transaction}")
 async def transaction_detail(transaction, response: Response):
@@ -410,7 +438,7 @@ async def transaction_detail(transaction, response: Response):
 
 @app.get("/api/txs/")
 async def transactions(response: Response, address=None, pageNum=None):
-    if address==None:
+    if address == None:
         response.status_code = 400
         return "address cannot be empty"
     result, status = await get_txs_for_address(address)
@@ -423,6 +451,7 @@ async def address_utxos(address, response: Response):
     result, status = await get_address_utxos(address)
     response.status_code = status
     return result
+
 
 @app.get("/api/block/{blockhash}")
 async def block_details(blockhash, response: Response):
