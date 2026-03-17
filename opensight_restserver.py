@@ -185,7 +185,8 @@ def format_tx_vin(vin, n):
     if not "coinbase" in vin:
         tx_vout = call_method_node("getrawtransaction", [vin["txid"], True])
         vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
-        vin["cashAddress"] = tx_vout["vout"][vin["vout"]]["scriptPubKey"]["addresses"][0]
+        _addresses = tx_vout["vout"][vin["vout"]]["scriptPubKey"].get("addresses", [])
+        vin["cashAddress"] = _addresses[0] if _addresses else None
         vin["doubleSpentTxID"] = None
     vin["n"] = n
     return vin
