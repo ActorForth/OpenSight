@@ -250,9 +250,8 @@ async def format_tx_vin(
         )
         tx_vout = dict(tx_vout["result"])
         vin["valueSat"] = tx_vout["vout"][vin["vout"]]["value"]
-        vin["cashAddress"] = tx_vout["vout"][vin["vout"]]["scriptPubKey"]["addresses"][
-            0
-        ]
+        _addresses = tx_vout["vout"][vin["vout"]]["scriptPubKey"].get("addresses", [])
+        vin["cashAddress"] = _addresses[0] if _addresses else None
         vin["doubleSpentTxID"] = None
     vin["n"] = n
     return vin
