@@ -92,7 +92,7 @@ class Tests:
         with TestClient(app) as client:
             url = "/"
             response = client.get(url)
-            assert response.json() == {"platform": "opensight", "version": "v1.0.4"}
+            assert response.json() == {"platform": "opensight", "version": "v1.0.5"}
 
     @mock.patch(
         "opensight_restserver.aiohttp.ClientSession.post", side_effect=mocked_post
