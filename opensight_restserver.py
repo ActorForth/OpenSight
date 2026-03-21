@@ -5,7 +5,6 @@ import logging
 import os
 import socket
 import sys
-import time
 import traceback
 from decimal import Decimal, getcontext
 from functools import wraps
@@ -39,7 +38,8 @@ async def startup():
         limit_per_host=PARALLEL_REQUESTS, limit=0, ttl_dns_cache=300
     )
     app.state.http_session = aiohttp.ClientSession(
-        connector=tcp_connector, timeout=session_timeout
+        connector=tcp_connector, timeout=session_timeout,
+        read_bufsize=2 ** 16,  # 64KB read buffer limit
     )
     app.state.http_semaphore = asyncio.Semaphore(PARALLEL_REQUESTS)
 
@@ -118,7 +118,7 @@ def retry(
                 )
                 log(msg, logger)
 
-                time.sleep(_delay)
+                await asyncio.sleep(_delay)
                 _delay *= backoff_factor
 
             log(f"Last Result: {result}")
@@ -194,33 +194,36 @@ async def call_method_node(
         raise e
 
 
-def call_method_electrum(method, params=None, id=0):  # pragma: no cover
-    # previously had _id as a parameter. changed in code to id
-    verb = False  # verbose?
-    with socket.create_connection((ELECTRUM_HOST, ELECTRUM_PORT), timeout=15.0) as sock:
+async def call_method_electrum(method, params=None, id=0):
+    """Async Electrum/Fulcrum JSON-RPC over TCP."""
+    outj = {"id": id, "jsonrpc": "2.0", "method": method, "params": params}
+    msg = json.dumps(outj, indent=None).encode("utf8") + b"\n"
 
-        def sndrecv(method, params=None):
-            outj = {"id": 0, "jsonrpc": "2.0", "method": method, "params": params}
-            msg = json.dumps(outj, indent=None).encode("utf8") + b"\n"
-            if verb:
-                print(f"Srv --> {msg[:2048]}")
-            sock.send(msg)
-            resp = bytearray()
-            while b"\n" not in resp:
-                resp += sock.recv(4096)
-            if verb:
-                print(f"Srv <-- {resp[:2048]}")
-            j = json.loads(resp.decode("utf8").strip())
-            if j.get("error") or j.get("id") != id:
-                raise Exception(
-                    "Error response from Fulcrum:\n\n"
-                    + (json.dumps(j.get("error"), indent=4) or j)
-                )
-            return j.get("result")
+    reader, writer = await asyncio.open_connection(ELECTRUM_HOST, ELECTRUM_PORT)
+    try:
+        writer.write(msg)
+        await writer.drain()
 
-        # global ID_NEXT
-        # reqid = ID_NEXT; ID_NEXT += 1
-        return sndrecv(method, params)
+        resp = bytearray()
+        while b"\n" not in resp:
+            chunk = await asyncio.wait_for(reader.read(4096), timeout=15.0)
+            if not chunk:
+                break
+            resp += chunk
+
+        j = json.loads(resp.decode("utf8").strip())
+        if j.get("error") or j.get("id") != id:
+            raise Exception(
+                "Error response from Fulcrum:\n\n"
+                + (json.dumps(j.get("error"), indent=4) or j)
+            )
+        return j.get("result")
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
 
 
 def format_utxo_from_electrum(utxo, best_block, address, p2pkh_script):
@@ -265,10 +268,10 @@ def format_tx_vout(vout):
     return vout
 
 
-def get_block_reward(block):
+async def get_block_reward(block):
     amount = 0
     coinbase_tx = block["tx"][0]
-    tx = call_method_electrum("blockchain.transaction.get", [coinbase_tx, True])
+    tx = await call_method_electrum("blockchain.transaction.get", [coinbase_tx, True])
 
     for vout in tx["vout"]:
         if "value" in vout:
@@ -325,23 +328,27 @@ async def get_tx_details(
         raise e
 
 
+TX_BATCH_SIZE = 20  # Process transactions in batches to limit memory
+
 async def get_txs_for_address(
     address, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore
 ):
     try:
-        tx_history = call_method_electrum("blockchain.address.get_history", [address])
+        tx_history = await call_method_electrum("blockchain.address.get_history", [address])
         txs = {}
-        tasks = []
-        for tx in tx_history:
-            tasks.append(
+        all_results = []
+
+        # Process in batches to limit concurrent memory usage
+        for i in range(0, len(tx_history), TX_BATCH_SIZE):
+            batch = tx_history[i:i + TX_BATCH_SIZE]
+            tasks = [
                 asyncio.create_task(get_tx_details(tx["tx_hash"], session, semaphore))
-            )
+                for tx in batch
+            ]
+            batch_results = await asyncio.gather(*tasks)
+            all_results.extend(batch_results)
 
-        # tasks = [await asyncio.create_task(get_tx_details(tx["tx_hash"]) for tx in tx_history)]
-        results = await asyncio.gather(*tasks)
-
-        txs["txs"] = results
-        # txs["txs"] = [get_tx_details(tx["tx_hash"])[0] for tx in tx_history]
+        txs["txs"] = all_results
         txs["pagesTotal"] = 0
         txs["currentPage"] = 0
         return txs, 200
@@ -367,7 +374,7 @@ async def get_block_details(
         block["isMainChain"] = True
         block["poolInfo"] = {}
 
-        block["reward"] = get_block_reward(block)
+        block["reward"] = await get_block_reward(block)
         status = 200
         return block, status
 
@@ -384,7 +391,7 @@ async def get_address_utxos(
         p2pkh_script, script_hash = script_hash_from_address(address)
 
         # Get the UTXOs for the given address
-        utxos = call_method_electrum("blockchain.address.listunspent", [address])
+        utxos = await call_method_electrum("blockchain.address.listunspent", [address])
 
         # Get current blockchain height
         best_block = await call_method_node("getblockcount", [], session, semaphore)
@@ -421,7 +428,7 @@ async def get_address_details(
 
         txs = txs[0]  # txs is tuple with status_code
 
-        balance = call_method_electrum("blockchain.address.get_balance", [address])
+        balance = await call_method_electrum("blockchain.address.get_balance", [address])
         address_details = {}
         total_balance = balance["confirmed"] + balance["unconfirmed"]
 

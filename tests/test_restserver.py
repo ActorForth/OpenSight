@@ -1,3 +1,4 @@
+import asyncio
 import json
 from unittest import mock
 
@@ -5,9 +6,10 @@ import nest_asyncio
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from opensight_restserver import (app, format_tx_vin,
+from opensight_restserver import (app, call_method_electrum, format_tx_vin,
                                   format_utxo_from_electrum, get_tx_details,
-                                  log)
+                                  get_address_details, get_txs_for_address,
+                                  TX_BATCH_SIZE, log)
 
 from samples import (address_details, address_result, address_tx, address_utxo,
                      block_hash_call_method_node, block_hash_electrum_result,
@@ -346,3 +348,164 @@ class Tests:
             response = client.get(url)
             assert response.json() == {"detail": "Error communicating with node"}
             assert response.status_code == 500
+
+    @mock.patch("opensight_restserver.asyncio.open_connection")
+    async def test_call_method_electrum_success(self, mock_conn):
+        """Test async electrum call returns result correctly."""
+        response_data = {"id": 0, "jsonrpc": "2.0", "result": {"confirmed": 1000, "unconfirmed": 0}}
+        response_bytes = json.dumps(response_data).encode("utf8") + b"\n"
+
+        mock_reader = mock.AsyncMock()
+        mock_reader.read = mock.AsyncMock(return_value=response_bytes)
+        mock_writer = mock.AsyncMock()
+        mock_writer.close = mock.Mock()
+        mock_writer.wait_closed = mock.AsyncMock()
+
+        mock_conn.return_value = (mock_reader, mock_writer)
+
+        result = await call_method_electrum("blockchain.address.get_balance", ["test_addr"])
+        assert result == {"confirmed": 1000, "unconfirmed": 0}
+        mock_writer.write.assert_called_once()
+        mock_writer.close.assert_called_once()
+
+    @mock.patch("opensight_restserver.asyncio.open_connection")
+    async def test_call_method_electrum_error_response(self, mock_conn):
+        """Test async electrum call raises on error response."""
+        response_data = {"id": 0, "jsonrpc": "2.0", "error": {"code": -1, "message": "not found"}}
+        response_bytes = json.dumps(response_data).encode("utf8") + b"\n"
+
+        mock_reader = mock.AsyncMock()
+        mock_reader.read = mock.AsyncMock(return_value=response_bytes)
+        mock_writer = mock.AsyncMock()
+        mock_writer.close = mock.Mock()
+        mock_writer.wait_closed = mock.AsyncMock()
+
+        mock_conn.return_value = (mock_reader, mock_writer)
+
+        with pytest.raises(Exception, match="Error response from Fulcrum"):
+            await call_method_electrum("blockchain.address.get_balance", ["bad_addr"])
+        mock_writer.close.assert_called_once()
+
+    @mock.patch("opensight_restserver.asyncio.open_connection")
+    async def test_call_method_electrum_connection_closed(self, mock_conn):
+        """Test async electrum call handles premature connection close."""
+        mock_reader = mock.AsyncMock()
+        mock_reader.read = mock.AsyncMock(return_value=b"")
+        mock_writer = mock.AsyncMock()
+        mock_writer.close = mock.Mock()
+        mock_writer.wait_closed = mock.AsyncMock()
+
+        mock_conn.return_value = (mock_reader, mock_writer)
+
+        with pytest.raises(Exception):
+            await call_method_electrum("blockchain.address.get_balance", ["test_addr"])
+        mock_writer.close.assert_called_once()
+
+    @mock.patch("opensight_restserver.get_tx_details")
+    @mock.patch("opensight_restserver.call_method_electrum")
+    async def test_get_txs_for_address_batching(self, mock_electrum, mock_get_tx):
+        """Test that get_txs_for_address processes in batches."""
+        num_txs = TX_BATCH_SIZE + 5
+        tx_history = [{"tx_hash": f"hash_{i}"} for i in range(num_txs)]
+        mock_electrum.return_value = tx_history
+        mock_get_tx.return_value = ({"txid": "test", "vin": [], "vout": []}, 200)
+
+        result, status = await get_txs_for_address("test_addr", None, asyncio.Semaphore(100))
+        assert status == 200
+        assert len(result["txs"]) == num_txs
+        assert mock_get_tx.call_count == num_txs
+
+    @mock.patch("opensight_restserver.aiohttp.ClientSession.post", side_effect=mocked_post)
+    @mock.patch("opensight_restserver.call_method_electrum")
+    def test_get_address_details_with_unconfirmed(self, mock_electrum, mock_post):
+        """Test address details with unconfirmed transactions (covers line 448->450)."""
+        # tx_history with one tx
+        unconfirmed_tx_history = [{"tx_hash": mocked_post_txid1}]
+        # balance with unconfirmed
+        unconfirmed_balance = {"confirmed": 0, "unconfirmed": 100000000}
+
+        mock_electrum.side_effect = [
+            unconfirmed_tx_history,  # get_history
+            unconfirmed_balance,  # get_balance
+        ]
+
+        with TestClient(app) as client:
+            url = f"/api/addr/{ADDRESS_ENDPOINT_TEST_ADDRESS}"
+            response = client.get(url)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["unconfirmedBalanceSat"] == 100000000
+
+    @mock.patch("opensight_restserver.call_method_electrum")
+    def test_retry_exhaustion_returns_500(self, mock_electrum):
+        """Test that retry exhaustion returns proper error (covers lines 103-112)."""
+        mock_electrum.side_effect = [
+            HTTPException(status_code=500, detail="fail"),
+            HTTPException(status_code=500, detail="fail"),
+            HTTPException(status_code=500, detail="fail"),
+            HTTPException(status_code=500, detail="fail"),
+            HTTPException(status_code=500, detail="fail"),
+        ]
+
+        with TestClient(app) as client:
+            url = f"/api/addr/{ADDRESS_ENDPOINT_TEST_ADDRESS}/utxo"
+            response = client.get(url)
+            assert response.status_code == 500
+            assert response.json() == {"detail": "Error communicating with node"}
+
+    @mock.patch("opensight_restserver.get_txs_for_address")
+    @mock.patch("opensight_restserver.call_method_electrum")
+    def test_get_address_details_txs_non_200(self, mock_electrum, mock_txs):
+        """Test address details when get_txs_for_address returns non-200 (covers line 427)."""
+        mock_txs.return_value = ({"error": "not found"}, 404)
+
+        with TestClient(app) as client:
+            url = f"/api/addr/{ADDRESS_ENDPOINT_TEST_ADDRESS}"
+            response = client.get(url)
+            assert response.status_code == 404
+            assert response.json() == {"error": "not found"}
+
+    @mock.patch("opensight_restserver.asyncio.open_connection")
+    async def test_call_method_electrum_wait_closed_exception(self, mock_conn):
+        """Test that writer cleanup handles wait_closed exceptions (covers lines 225-226)."""
+        response_data = {"id": 0, "jsonrpc": "2.0", "result": []}
+        response_bytes = json.dumps(response_data).encode("utf8") + b"\n"
+
+        mock_reader = mock.AsyncMock()
+        mock_reader.read = mock.AsyncMock(return_value=response_bytes)
+        mock_writer = mock.AsyncMock()
+        mock_writer.close = mock.Mock()
+        mock_writer.wait_closed = mock.AsyncMock(side_effect=ConnectionResetError("reset"))
+
+        mock_conn.return_value = (mock_reader, mock_writer)
+
+        result = await call_method_electrum("blockchain.address.listunspent", ["test"])
+        assert result == []
+        mock_writer.close.assert_called_once()
+
+    @mock.patch("opensight_restserver.call_method_electrum")
+    @mock.patch("opensight_restserver.get_txs_for_address")
+    def test_get_address_details_all_confirmed(self, mock_txs, mock_electrum):
+        """Test address details where all txs are confirmed (covers branch 448->450)."""
+        # Mock txs with confirmed transactions (confirmations > 0)
+        mock_txs.return_value = (
+            {
+                "txs": [
+                    ({"txid": "abc123", "confirmations": 10, "vout": [
+                        {"value": 1.0, "scriptPubKey": {"hex": "76a914596cd4508cd763b019bd4b83e1b4ca0fa58281a688ac"}}
+                    ]}, 200),
+                ],
+                "pagesTotal": 0,
+                "currentPage": 0,
+            },
+            200,
+        )
+        mock_electrum.return_value = {"confirmed": 100000000, "unconfirmed": 0}
+
+        with TestClient(app) as client:
+            url = f"/api/addr/{ADDRESS_ENDPOINT_TEST_ADDRESS}"
+            response = client.get(url)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["unconfirmedTxAppearances"] == 0
+            assert data["unconfirmedBalanceSat"] == 0
